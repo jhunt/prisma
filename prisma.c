@@ -15,6 +15,16 @@
 #define EXIT_ENV_FAILURE 2
 #define EXIT_INT_FAILURE 2
 
+struct map {
+	int *cells;
+
+	int  width;
+	int  height;
+
+	int  offset_x;
+	int  offset_y;
+};
+
 void init()
 {
 	int rc;
@@ -38,14 +48,19 @@ void quit()
 }
 
 /* tiles! */
-#define TOP_WALL     0
-#define SIDE_WALL    1
-#define BOTTOM_WALL  2
-#define TOP_CORNER   3
-#define FLOOR        8
-#define WHOLE_JAR   27
-#define TABLE       54
-#define CABINET     55
+#define TILE_NONE            0
+#define TILE_A_TOP_WALL    ( 1 << 24)
+#define TILE_A_SIDE_WALL   ( 2 << 24)
+#define TILE_A_BOTTOM_WALL ( 3 << 24)
+#define TILE_A_TOP_CORNER  ( 4 << 24)
+#define TILE_A_FLOOR       ( 9 << 24)
+#define TILE_A_WHOLE_JAR   (28 << 24)
+#define TILE_A_TABLE       (55 << 24)
+#define TILE_A_CABINET     (56 << 24)
+
+#define WHOLE_JAR 27
+
+#define TILE_SOLID          0x01
 
 #define TILE_WIDTH  16
 #define TILE_HEIGHT 16
@@ -72,12 +87,12 @@ void tile(SDL_Surface *dst, int x, int y, SDL_Surface *tiles, int t)
 	SDL_BlitScaled(tiles, &srect, dst, &drect);
 }
 
-char *
-readmap(const char *path)
+static char *
+s_readmap_raw(const char *path)
 {
 	int fd;
 	off_t size;
-	char *map;
+	char *raw;
 	size_t n;
 	ssize_t nread;
 
@@ -105,8 +120,8 @@ readmap(const char *path)
 		exit(EXIT_ENV_FAILURE);
 	}
 
-	map = calloc(size + 1, sizeof(char));
-	if (!map) {
+	raw = calloc(size + 1, sizeof(char));
+	if (!raw) {
 		fprintf(stderr, "failed to allocate memory: %s (error %d)\n",
 				strerror(errno), errno);
 		exit(EXIT_INT_FAILURE);
@@ -114,7 +129,7 @@ readmap(const char *path)
 
 	n = 0;
 	for (;;) {
-		nread = read(fd, map + n, READ_BLOCK_SIZE);
+		nread = read(fd, raw + n, READ_BLOCK_SIZE);
 		if (nread == 0) break;
 		if (nread < 0) {
 			fprintf(stderr, "failed to read map from %s: %s (error %d)\n",
@@ -124,68 +139,98 @@ readmap(const char *path)
 		n += nread;
 	}
 
+	close(fd);
+	return raw;
+}
+
+static void
+s_mapsize(const char *raw, int *w, int *h)
+{
+	const char *a, *b;
+	int l;
+
+	a = raw;
+	for (;;) {
+		b = strchr(a, '\n');
+		if (b) l = b - a;
+		else   l = strlen(a);
+
+		if (l > *w) *w = l;
+		*h += 1;
+
+		if (!b) break;
+		a = ++b;
+	}
+}
+
+#define mapat(map,x,y) \
+          ((map)->cells[(y) * (map)->height + (x)])
+
+static int
+istile(int t)
+{
+	return (t >> 24) != 0;
+}
+
+static int
+issolid(struct map *map, int x, int y)
+{
+	/* out-of-bounds is SOLID */
+	if (x < 0 || x > map->width ||
+	    y < 0 || y > map->height) return 1;
+
+	return mapat(map, x, y) & TILE_SOLID;
+}
+
+struct map *
+readmap(const char *path)
+{
+	char *raw, *p;
+	struct map *map;
+	int x, y;
+
+	raw = s_readmap_raw(path);
+	map = calloc(1, sizeof(struct map));
+	if (!map) {
+		fprintf(stderr, "failed to allocate memory: %s (error %d)\n",
+				strerror(errno), errno);
+		exit(EXIT_INT_FAILURE);
+	}
+
+	s_mapsize(raw, &map->width, &map->height);
+	map->cells = calloc(map->width * map->height, sizeof(int));
+
+	/* decode the newline-terminated map into a cell-list */
+	for (x = y = 0, p = raw; *p; p++) {
+		switch (*p) {
+		case '\n': x = 0; y++; break;
+		case '+': mapat(map, x++, y) = TILE_A_TOP_CORNER  | TILE_SOLID; break;
+		case '-': mapat(map, x++, y) = TILE_A_TOP_WALL    | TILE_SOLID; break;
+		case '=': mapat(map, x++, y) = TILE_A_BOTTOM_WALL | TILE_SOLID; break;
+		case '|': mapat(map, x++, y) = TILE_A_SIDE_WALL   | TILE_SOLID; break;
+		case 'c': mapat(map, x++, y) = TILE_A_CABINET     | TILE_SOLID; break;
+		case 't': mapat(map, x++, y) = TILE_A_TABLE       | TILE_SOLID; break;
+		case ' ': mapat(map, x++, y) = TILE_A_FLOOR;                    break;
+		default:  mapat(map, x++, y) = TILE_NONE;                       break;
+		}
+	}
+
+	free(raw);
 	return map;
 }
 
 void
-drawmap(SDL_Surface *dst, SDL_Surface *tiles, const char *map)
+drawmap(SDL_Surface *dst, SDL_Surface *tiles, struct map *map, int cx, int cy)
 {
-	int i, len, x, y;
-	x = y = i = 0;
-	len = strlen(map);
-	for (; i < len; i++) {
-		x++;
-		switch (map[i]) {
-		case '\n':
-			y++;
-			x = 0;
-			break;
+	int x, y;
 
-		case '+':
-			tile(dst, x, y, tiles, TOP_CORNER);
-			break;
-		case '-':
-			tile(dst, x, y, tiles, TOP_WALL);
-			break;
-		case '=':
-			tile(dst, x, y, tiles, BOTTOM_WALL);
-			break;
-		case '|':
-			tile(dst, x, y, tiles, SIDE_WALL);
-			break;
-
-		case 'c':
-			tile(dst, x, y, tiles, CABINET);
-			break;
-		case 't':
-			tile(dst, x, y, tiles, TABLE);
-			break;
-
-		case ' ':
-			tile(dst, x, y, tiles, FLOOR);
-			break;
+	for (x = 0; x < map->width; x++) {
+		for (y = 0; y < map->height; y++) {
+			if (istile(mapat(map, x, y))) {
+				tile(dst, x, y, tiles, (mapat(map, x, y) >> 24) - 1);
+			}
 		}
 	}
-}
-
-int
-solid(const char *map, int x, int y)
-{
-	const char *p;
-
-	/* ran off the beginning of the map */
-	if (x < 0 || y < 0) return 1;
-
-	p = map;
-	while (p && y--) {
-		p = strchr(p, '\n');
-		if (!p) return 1;
-		p++;
-	}
-	while (*p && *p != '\n' && --x) p++;
-
-	/* only floors are not solid */
-	return p && *p != ' ';
 }
 
 #define SCREEN_WIDTH  (16 * 16 * TILE_SCALE)
@@ -197,7 +242,7 @@ int main(int argc, char **argv)
 	SDL_Surface *sfc, *tileset;
 	SDL_Event    e;
 	int x, xd, y, yd, done;
-	char *map;
+	struct map *map;
 
 	init();
 
@@ -263,13 +308,16 @@ int main(int argc, char **argv)
 					break;
 				}
 
-				if ((xd || yd) && !solid(map, x + xd, y + yd)) {
+				if ((xd || yd) &&  issolid(map, x + xd, y + yd)) {
+					fprintf(stderr, "tile at (%d, %d) is SOLID\n", x + xd, y + yd);
+				}
+				if ((xd || yd) && !issolid(map, x + xd, y + yd)) {
 					x += xd;
 					y += yd;
 				}
 			}
 		}
-		drawmap(sfc, tileset, map);
+		drawmap(sfc, tileset, map, 0, 0);
 		tile(sfc, x, y, tileset, WHOLE_JAR);
 
 		SDL_UpdateWindowSurface(win);
