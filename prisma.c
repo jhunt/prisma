@@ -218,7 +218,9 @@ s_mapsize(const char *raw, int *w, int *h)
 		*h += 1;
 
 		if (!b) break;
+
 		a = ++b;
+		if (!*b) break;
 	}
 }
 
@@ -232,13 +234,16 @@ istile(int t)
 }
 
 static int
+inmap(struct map *map, int x, int y)
+{
+	return !(x < 0 || x > map->width ||
+	         y < 0 || y > map->height);
+}
+
+static int
 issolid(struct map *map, int x, int y)
 {
-	/* out-of-bounds is SOLID */
-	if (x < 0 || x > map->width ||
-	    y < 0 || y > map->height) return 1;
-
-	return mapat(map, x, y) & TILE_SOLID;
+	return !inmap(map, x, y) || mapat(map, x, y) & TILE_SOLID;
 }
 
 void
@@ -304,21 +309,22 @@ draw_map(struct screen *scr, SDL_Surface *tiles, struct map *map, int cx, int cy
 	assert(tiles != NULL);
 	assert(map != NULL);
 
-	int x, y, w, h;
+	int x, y;
 
 	cx = bounded(0, cx - scr->width  / 2, map->width  - scr->width);
 	cy = bounded(0, cy - scr->height / 2, map->height - scr->height);
 
-	w = bounded(map->width, scr->width, scr->width);
-	h = bounded(map->height, scr->height, scr->height);
-
-	for (x = 0; x < w; x++) {
-		for (y = 0; y < h; y++) {
-			int t = mapat(map, x+cx, y+cy);
-			if (istile(t)) {
-				tile(scr->surface, x, y, tiles, (t >> 24) - 1);
+	for (x = 0; x < scr->width; x++) {
+		for (y = 0; y < scr->height; y++) {
+			if (inmap(map, x+cx, y+cy)) {
+				int t = mapat(map, x+cx, y+cy);
+				if (istile(t)) {
+					tile(scr->surface, x, y, tiles, (t >> 24) - 1);
+				} else {
+					tile(scr->surface, x, y, tiles, 22);
+				}
 			} else {
-				tile(scr->surface, x, y, tiles, 21);
+				tile(scr->surface, x, y, tiles, 22);
 			}
 		}
 	}
