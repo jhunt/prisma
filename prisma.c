@@ -212,7 +212,6 @@ s_mapsize(const char *raw, int *w, int *h)
 		b = strchr(a, '\n');
 		if (b) l = b - a;
 		else   l = strlen(a);
-		fprintf(stderr, "mapsize: l = %d, map is %dx%d\n", l, *w, *h);
 
 		if (l > *w) *w = l;
 		*h += 1;
@@ -269,14 +268,10 @@ readmap(const char *path)
 	}
 
 	s_mapsize(raw, &map->width, &map->height);
-	fprintf(stderr, "map is %dx%d, allocating %lu bytes to house it\n",
-			map->width, map->height, map->width * map->height * sizeof(int));
 	map->cells = calloc(map->width * map->height, sizeof(int));
 
 	/* decode the newline-terminated map into a cell-list */
 	for (x = y = 0, p = raw; *p; p++) {
-		fprintf(stderr, "decode: %p (%d, %d) = [%c %02x]\n",
-			(void*)&mapat(map, x, y), x, y, *p, *p);
 		switch (*p) {
 		case '\n': x = 0; y++; break;
 		case '+': mapat(map, x++, y) = TILE_A_TOP_CORNER  | TILE_SOLID; break;
