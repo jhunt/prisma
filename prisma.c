@@ -185,7 +185,7 @@ s_readmap_raw(const char *path)
 
 	n = 0;
 	for (;;) {
-		nread = read(fd, raw + n, READ_BLOCK_SIZE);
+		nread = read(fd, raw + n, READ_BLOCK_SIZE > size ? size : READ_BLOCK_SIZE);
 		if (nread == 0) break;
 		if (nread < 0) {
 			fprintf(stderr, "failed to read map from %s: %s (error %d)\n",
@@ -193,6 +193,7 @@ s_readmap_raw(const char *path)
 			exit(EXIT_ENV_FAILURE);
 		}
 		n += nread;
+		if (n == size) break;
 	}
 
 	close(fd);
@@ -205,11 +206,13 @@ s_mapsize(const char *raw, int *w, int *h)
 	const char *a, *b;
 	int l;
 
+	*w = *h = 0;
 	a = raw;
 	for (;;) {
 		b = strchr(a, '\n');
 		if (b) l = b - a;
 		else   l = strlen(a);
+		fprintf(stderr, "mapsize: l = %d, map is %dx%d\n", l, *w, *h);
 
 		if (l > *w) *w = l;
 		*h += 1;
@@ -220,7 +223,7 @@ s_mapsize(const char *raw, int *w, int *h)
 }
 
 #define mapat(map,x,y) \
-          ((map)->cells[(map)->width * (x) + (y)])
+          ((map)->cells[(map)->height * (x) + (y)])
 
 static int
 istile(int t)
@@ -236,6 +239,13 @@ issolid(struct map *map, int x, int y)
 	    y < 0 || y > map->height) return 1;
 
 	return mapat(map, x, y) & TILE_SOLID;
+}
+
+void
+free_map(struct map *m)
+{
+	if (m) free(m->cells);
+	free(m);
 }
 
 struct map *
@@ -254,10 +264,14 @@ readmap(const char *path)
 	}
 
 	s_mapsize(raw, &map->width, &map->height);
+	fprintf(stderr, "map is %dx%d, allocating %lu bytes to house it\n",
+			map->width, map->height, map->width * map->height * sizeof(int));
 	map->cells = calloc(map->width * map->height, sizeof(int));
 
 	/* decode the newline-terminated map into a cell-list */
 	for (x = y = 0, p = raw; *p; p++) {
+		fprintf(stderr, "decode: %p (%d, %d) = [%c %02x]\n",
+			(void*)&mapat(map, x, y), x, y, *p, *p);
 		switch (*p) {
 		case '\n': x = 0; y++; break;
 		case '+': mapat(map, x++, y) = TILE_A_TOP_CORNER  | TILE_SOLID; break;
@@ -290,13 +304,16 @@ draw_map(struct screen *scr, SDL_Surface *tiles, struct map *map, int cx, int cy
 	assert(tiles != NULL);
 	assert(map != NULL);
 
-	int x, y;
+	int x, y, w, h;
 
 	cx = bounded(0, cx - scr->width  / 2, map->width  - scr->width);
 	cy = bounded(0, cy - scr->height / 2, map->height - scr->height);
 
-	for (x = 0; x < scr->width; x++) {
-		for (y = 0; y < scr->height; y++) {
+	w = bounded(map->width, scr->width, scr->width);
+	h = bounded(map->height, scr->height, scr->height);
+
+	for (x = 0; x < w; x++) {
+		for (y = 0; y < h; y++) {
 			int t = mapat(map, x+cx, y+cy);
 			if (istile(t)) {
 				tile(scr->surface, x, y, tiles, (t >> 24) - 1);
@@ -376,6 +393,8 @@ int main(int argc, char **argv)
 		SDL_Delay(150);
 	}
 
+	SDL_FreeSurface(tileset);
+	free_map(map);
 	free_screen(scr);
 	quit();
 
