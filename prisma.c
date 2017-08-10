@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <assert.h>
 
 #include <SDL.h>
 #include <SDL_image.h>
@@ -15,14 +16,19 @@
 #define EXIT_ENV_FAILURE 2
 #define EXIT_INT_FAILURE 2
 
+struct screen {
+	int  width;
+	int  height;
+
+	SDL_Surface  *surface;
+	SDL_Window   *window;
+};
+
 struct map {
 	int *cells;
 
 	int  width;
 	int  height;
-
-	int  offset_x;
-	int  offset_y;
 };
 
 void init()
@@ -47,6 +53,62 @@ void quit()
 	SDL_Quit();
 }
 
+#define TILE_WIDTH  16
+#define TILE_HEIGHT 16
+#define TILE_SCALE  4
+
+#define TILESET_WIDTH 8
+
+struct screen *
+make_screen(const char *title, int w, int h)
+{
+	struct screen *s;
+
+	s = malloc(sizeof(struct screen));
+	if (!s) {
+		fprintf(stderr, "failed to allocate memory: %s (error %d)\n",
+				strerror(errno), errno);
+		exit(EXIT_INT_FAILURE);
+	}
+
+	s->window = SDL_CreateWindow(
+		title,
+		SDL_WINDOWPOS_UNDEFINED,
+		SDL_WINDOWPOS_UNDEFINED,
+		w, h,
+		SDL_WINDOW_FULLSCREEN_DESKTOP
+	);
+	if (!s->window) {
+		fprintf(stderr, "failed to create window: %s\n", SDL_GetError());
+		exit(EXIT_INT_FAILURE);
+	}
+
+	s->surface = SDL_GetWindowSurface(s->window);
+	if (!s->surface) {
+		fprintf(stderr, "failed to get surface from window: %s\n", SDL_GetError());
+		exit(EXIT_INT_FAILURE);
+	}
+
+	SDL_GetWindowSize(s->window, &s->width, &s->height);
+	s->width  = s->width  / TILE_SCALE / TILE_WIDTH;
+	s->height = s->height / TILE_SCALE / TILE_HEIGHT;
+
+	return s;
+}
+
+void
+draw_screen(struct screen *s)
+{
+	SDL_UpdateWindowSurface(s->window);
+}
+
+void
+free_screen(struct screen *s)
+{
+	if (s && s->window) SDL_DestroyWindow(s->window);
+	free(s);
+}
+
 /* tiles! */
 #define TILE_NONE            0
 #define TILE_A_TOP_WALL    ( 1 << 24)
@@ -61,12 +123,6 @@ void quit()
 #define WHOLE_JAR 27
 
 #define TILE_SOLID          0x01
-
-#define TILE_WIDTH  16
-#define TILE_HEIGHT 16
-#define TILE_SCALE  4
-
-#define TILESET_WIDTH 8
 
 void tile(SDL_Surface *dst, int x, int y, SDL_Surface *tiles, int t)
 {
@@ -164,7 +220,7 @@ s_mapsize(const char *raw, int *w, int *h)
 }
 
 #define mapat(map,x,y) \
-          ((map)->cells[(y) * (map)->height + (x)])
+          ((map)->cells[(map)->width * (x) + (y)])
 
 static int
 istile(int t)
@@ -219,49 +275,51 @@ readmap(const char *path)
 	return map;
 }
 
-void
-drawmap(SDL_Surface *dst, SDL_Surface *tiles, struct map *map, int cx, int cy)
+int
+bounded(int min, int v, int max)
 {
+	if (v < min) return min;
+	if (v > max) return max;
+	return v;
+}
+
+void
+draw_map(struct screen *scr, SDL_Surface *tiles, struct map *map, int cx, int cy)
+{
+	assert(scr != NULL);
+	assert(tiles != NULL);
+	assert(map != NULL);
+
 	int x, y;
 
-	for (x = 0; x < map->width; x++) {
-		for (y = 0; y < map->height; y++) {
-			if (istile(mapat(map, x, y))) {
-				tile(dst, x, y, tiles, (mapat(map, x, y) >> 24) - 1);
+	cx = bounded(0, cx - scr->width  / 2, map->width  - scr->width);
+	cy = bounded(0, cy - scr->height / 2, map->height - scr->height);
+
+	for (x = 0; x < scr->width; x++) {
+		for (y = 0; y < scr->height; y++) {
+			int t = mapat(map, x+cx, y+cy);
+			if (istile(t)) {
+				tile(scr->surface, x, y, tiles, (t >> 24) - 1);
+			} else {
+				tile(scr->surface, x, y, tiles, 21);
 			}
 		}
 	}
 }
 
-#define SCREEN_WIDTH  (16 * 16 * TILE_SCALE)
-#define SCREEN_HEIGHT (16 *  6 * TILE_SCALE)
-
 int main(int argc, char **argv)
 {
-	SDL_Window  *win;
-	SDL_Surface *sfc, *tileset;
-	SDL_Event    e;
+	struct screen *scr;
+	SDL_Surface   *tileset;
+	SDL_Event      e;
 	int x, xd, y, yd, done;
 	struct map *map;
 
 	init();
 
-	win = SDL_CreateWindow(
-		"SDL Tutorial",
-		SDL_WINDOWPOS_UNDEFINED,
-		SDL_WINDOWPOS_UNDEFINED,
-		SCREEN_WIDTH,
-		SCREEN_HEIGHT,
-		SDL_WINDOW_FULLSCREEN_DESKTOP
-	);
-	if (!win) {
-		fprintf(stderr, "failed to create window: %s\n", SDL_GetError());
-		return 1;
-	}
-
-	sfc = SDL_GetWindowSurface(win);
-	if (!sfc) {
-		fprintf(stderr, "failed to get surface from window: %s\n", SDL_GetError());
+	scr = make_screen("prismatic", 640, 480);
+	if (!scr) {
+		fprintf(stderr, "failed to initialize the screen: %s\n", SDL_GetError());
 		return 1;
 	}
 
@@ -273,12 +331,6 @@ int main(int argc, char **argv)
 
 	map = readmap("maps/base");
 	done = 0;
-
-	int w, h;
-	SDL_GetWindowSize(win, &w, &h);
-	fprintf(stderr, "window is %d wide by %d high\n", w, h);
-	fprintf(stderr, "(which is %d tiles wide by %d tiles high)\n",
-			w / TILE_WIDTH / TILE_SCALE, h / TILE_HEIGHT / TILE_SCALE);
 
 	x = y = 3;
 	while (!done) {
@@ -308,23 +360,23 @@ int main(int argc, char **argv)
 					break;
 				}
 
-				if ((xd || yd) &&  issolid(map, x + xd, y + yd)) {
-					fprintf(stderr, "tile at (%d, %d) is SOLID\n", x + xd, y + yd);
-				}
 				if ((xd || yd) && !issolid(map, x + xd, y + yd)) {
 					x += xd;
 					y += yd;
 				}
 			}
 		}
-		drawmap(sfc, tileset, map, 0, 0);
-		tile(sfc, x, y, tileset, WHOLE_JAR);
+		draw_map(scr, tileset, map, x, y);
+		int cx, cy;
+	cx = bounded(0, x - scr->width  / 2, map->width  - scr->width);
+	cy = bounded(0, y - scr->height / 2, map->height - scr->height);
+		tile(scr->surface, x - cx, y - cy, tileset, WHOLE_JAR);
 
-		SDL_UpdateWindowSurface(win);
+		draw_screen(scr);
 		SDL_Delay(150);
 	}
 
-	SDL_DestroyWindow(win);
+	free_screen(scr);
 	quit();
 
 	return 0;
