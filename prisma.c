@@ -19,17 +19,126 @@
 struct screen {
 	int  width;
 	int  height;
+	int  scale;
 
 	SDL_Surface  *surface;
 	SDL_Window   *window;
 };
+
+struct tileset {
+	SDL_Surface *surface;
+	int width;
+
+	struct {
+		int width;
+		int height;
+	} tile;
+};
+
+void
+free_tileset(struct tileset *t)
+{
+	if (t && t->surface) SDL_FreeSurface(t->surface);
+	free(t);
+}
+
+struct tileset *
+read_tileset(const char *path)
+{
+	struct tileset *tiles;
+	char *p   = NULL;
+	FILE *nfo = NULL;
+	int rc;
+
+	tiles = calloc(1, sizeof(struct tileset));
+	if (!tiles) {
+		fprintf(stderr, "failed to allocate memory: %s (error %d)\n",
+				strerror(errno), errno);
+		exit(EXIT_INT_FAILURE);
+	}
+
+	rc = asprintf(&p, "%s.png", path);
+	if (rc < 0) {
+		fprintf(stderr, "failed to allocate memory: %s (error %d)\n",
+				strerror(errno), errno);
+		exit(EXIT_INT_FAILURE);
+	}
+
+	tiles->surface = IMG_Load(p);
+	if (!tiles->surface) {
+		fprintf(stderr, "failed to load tileset image %s: %s (error %d)\n",
+				p, strerror(errno), errno);
+		goto failed;
+	}
+
+	free(p);
+	rc = asprintf(&p, "%s.nfo", path);
+	if (rc < 0) {
+		fprintf(stderr, "failed to allocate memory: %s (error %d)\n",
+				strerror(errno), errno);
+		exit(EXIT_INT_FAILURE);
+	}
+
+	nfo = fopen(p, "r");
+	if (!nfo) {
+		fprintf(stderr, "failed to load tileset metadata %s: %s (error %d)\n",
+				p, strerror(errno), errno);
+		goto failed;
+	}
+	rc = fscanf(nfo, "SPRITES %dx%d %d\n",
+		&tiles->tile.width,
+		&tiles->tile.height,
+		&tiles->width);
+	if (rc != 3) {
+		fprintf(stderr, "failed to parse tileset metadata from %s: invalid format.\n", p);
+		goto failed;
+	}
+
+	free(p);
+	fclose(nfo);
+	return tiles;
+
+failed:
+	if (nfo) fclose(nfo);
+	free(p);
+	free_tileset(tiles);
+	return NULL;
+}
 
 struct map {
 	int *cells;
 
 	int  width;
 	int  height;
+
+	struct tileset *tiles;
 };
+
+void
+draw_tile(struct screen *screen, struct tileset *tiles, int t, int x, int y)
+{
+	assert(screen != NULL);
+	assert(tiles != NULL);
+	assert(t >= 0);
+	assert(x >= 0);
+	assert(y >= 0);
+
+	SDL_Rect src = {
+		.x = tiles->tile.width  * (t % tiles->width),
+		.y = tiles->tile.height * (t / tiles->width),
+		.w = tiles->tile.width,
+		.h = tiles->tile.height,
+	};
+
+	SDL_Rect dst = {
+		.x = x * tiles->tile.width  * screen->scale,
+		.y = y * tiles->tile.height * screen->scale,
+		.w =     tiles->tile.width  * screen->scale,
+		.h =     tiles->tile.height * screen->scale,
+	};
+
+	SDL_BlitScaled(tiles->surface, &src, screen->surface, &dst);
+}
 
 void init()
 {
@@ -55,12 +164,9 @@ void quit()
 
 #define TILE_WIDTH  16
 #define TILE_HEIGHT 16
-#define TILE_SCALE  4
-
-#define TILESET_WIDTH 8
 
 struct screen *
-make_screen(const char *title, int w, int h)
+make_screen(const char *title, int w, int h, int scale)
 {
 	struct screen *s;
 
@@ -90,8 +196,9 @@ make_screen(const char *title, int w, int h)
 	}
 
 	SDL_GetWindowSize(s->window, &s->width, &s->height);
-	s->width  = s->width  / TILE_SCALE / TILE_WIDTH;
-	s->height = s->height / TILE_SCALE / TILE_HEIGHT;
+	s->scale  = scale;
+	s->width  = s->width  / s->scale / TILE_WIDTH;
+	s->height = s->height / s->scale / TILE_HEIGHT;
 
 	return s;
 }
@@ -120,28 +227,9 @@ free_screen(struct screen *s)
 #define TILE_A_TABLE       (55 << 24)
 #define TILE_A_CABINET     (56 << 24)
 
-#define WHOLE_JAR 27
+#define HERO_AVATAR 0
 
 #define TILE_SOLID          0x01
-
-void tile(SDL_Surface *dst, int x, int y, SDL_Surface *tiles, int t)
-{
-	SDL_Rect srect = {
-		.x = TILE_WIDTH  * (t % TILESET_WIDTH),
-		.y = TILE_HEIGHT * (t / TILESET_WIDTH),
-		.w = TILE_WIDTH,
-		.h = TILE_HEIGHT,
-	};
-
-	SDL_Rect drect = {
-		.x = x * TILE_WIDTH  * TILE_SCALE,
-		.y = y * TILE_HEIGHT * TILE_SCALE,
-		.w =     TILE_WIDTH  * TILE_SCALE,
-		.h =     TILE_HEIGHT * TILE_SCALE,
-	};
-
-	SDL_BlitScaled(tiles, &srect, dst, &drect);
-}
 
 static char *
 s_readmap_raw(const char *path)
@@ -279,7 +367,8 @@ readmap(const char *path)
 		case '=': mapat(map, x++, y) = TILE_A_BOTTOM_WALL | TILE_SOLID; break;
 		case '|': mapat(map, x++, y) = TILE_A_SIDE_WALL   | TILE_SOLID; break;
 		case 'c': mapat(map, x++, y) = TILE_A_CABINET     | TILE_SOLID; break;
-		case 't': mapat(map, x++, y) = TILE_A_TABLE       | TILE_SOLID; break;
+		case 'u': mapat(map, x++, y) = TILE_A_WHOLE_JAR   | TILE_SOLID; break;
+		case 'n': mapat(map, x++, y) = TILE_A_TABLE       | TILE_SOLID; break;
 		case ' ': mapat(map, x++, y) = TILE_A_FLOOR;                    break;
 		default:  mapat(map, x++, y) = TILE_NONE;                       break;
 		}
@@ -298,7 +387,7 @@ bounded(int min, int v, int max)
 }
 
 void
-draw_map(struct screen *scr, SDL_Surface *tiles, struct map *map, int cx, int cy)
+draw_map(struct screen *scr, struct tileset *tiles, struct map *map, int cx, int cy)
 {
 	assert(scr != NULL);
 	assert(tiles != NULL);
@@ -314,12 +403,12 @@ draw_map(struct screen *scr, SDL_Surface *tiles, struct map *map, int cx, int cy
 			if (inmap(map, x+cx, y+cy)) {
 				int t = mapat(map, x+cx, y+cy);
 				if (istile(t)) {
-					tile(scr->surface, x, y, tiles, (t >> 24) - 1);
+					draw_tile(scr, tiles, (t >> 24) - 1, x, y);
 				} else {
-					tile(scr->surface, x, y, tiles, 22);
+					draw_tile(scr, tiles, 22, x, y);
 				}
 			} else {
-				tile(scr->surface, x, y, tiles, 22);
+				draw_tile(scr, tiles, 22, x, y);
 			}
 		}
 	}
@@ -327,29 +416,25 @@ draw_map(struct screen *scr, SDL_Surface *tiles, struct map *map, int cx, int cy
 
 int main(int argc, char **argv)
 {
-	struct screen *scr;
-	SDL_Surface   *tileset;
+	struct screen  *scr;
+	struct map     *map;
+	struct tileset *tiles, *sprites;
 	SDL_Event      e;
 	int x, xd, y, yd, done;
-	struct map *map;
 
 	init();
 
-	scr = make_screen("prismatic", 640, 480);
+	scr = make_screen("prismatic", 640, 480, 4);
 	if (!scr) {
 		fprintf(stderr, "failed to initialize the screen: %s\n", SDL_GetError());
 		return 1;
 	}
 
-	tileset = IMG_Load("assets/tileset.png");
-	if (!tileset) {
-		fprintf(stderr, "failed to load tileset.png: %s\n", SDL_GetError());
-		return 1;
-	}
+	tiles   = read_tileset("assets/tileset");
+	sprites = read_tileset("assets/purple-hair-sprite");
+	map     = readmap("maps/base");
 
-	map = readmap("maps/base");
 	done = 0;
-
 	x = y = 3;
 	while (!done) {
 		while (SDL_PollEvent(&e) != 0) {
@@ -384,17 +469,16 @@ int main(int argc, char **argv)
 				}
 			}
 		}
-		draw_map(scr, tileset, map, x, y);
+		draw_map(scr, tiles, map, x, y);
 		int cx, cy;
-	cx = bounded(0, x - scr->width  / 2, map->width  - scr->width);
-	cy = bounded(0, y - scr->height / 2, map->height - scr->height);
-		tile(scr->surface, x - cx, y - cy, tileset, WHOLE_JAR);
+		cx = bounded(0, x - scr->width  / 2, map->width  - scr->width);
+		cy = bounded(0, y - scr->height / 2, map->height - scr->height);
+		draw_tile(scr, sprites, HERO_AVATAR, x - cx, y - cy);
 
 		draw_screen(scr);
 		SDL_Delay(150);
 	}
 
-	SDL_FreeSurface(tileset);
 	free_map(map);
 	free_screen(scr);
 	quit();
