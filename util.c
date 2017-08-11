@@ -33,3 +33,11 @@ astring(const char *fmt, ...)
 
 	return s;
 }
+
+int
+bounded(int min, int v, int max)
+{
+	if (v < min) return min;
+	if (v > max) return max;
+	return v;
+}
