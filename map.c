@@ -14,6 +14,7 @@
 #define TILE_A_BOTTOM_WALL ( 3 << 24)
 #define TILE_A_TOP_CORNER  ( 4 << 24)
 #define TILE_A_FLOOR       ( 9 << 24)
+#define TILE_A_CARPET      (18 << 24)
 #define TILE_A_WHOLE_JAR   (28 << 24)
 #define TILE_A_TABLE       (55 << 24)
 #define TILE_A_CABINET     (56 << 24)
@@ -146,6 +147,7 @@ map_read(const char *path)
 		case 'u': mapat(map, x++, y) = TILE_A_WHOLE_JAR   | TILE_SOLID; break;
 		case 'n': mapat(map, x++, y) = TILE_A_TABLE       | TILE_SOLID; break;
 		case ' ': mapat(map, x++, y) = TILE_A_FLOOR;                    break;
+		case 'x': mapat(map, x++, y) = TILE_A_CARPET;                   break;
 		default:  mapat(map, x++, y) = TILE_NONE;                       break;
 		}
 	}
