@@ -19,16 +19,7 @@
    like failure to allocate memory when asked. */
 #define EXIT_INT_FAILURE 2
 
-void *
-allocate(size_t n, size_t size)
-{
-	void *p = calloc(n, size);
-	if (!p) {
-		fprintf(stderr, "failed to allocate memory: %s (error %d)\n",
-				strerror(errno), errno);
-		exit(EXIT_INT_FAILURE);
-	}
-	return p;
-}
+void * allocate(size_t n, size_t size);
+void * astring(const char *fmt, ...);
 
 #endif
