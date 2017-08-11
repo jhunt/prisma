@@ -1,3 +1,5 @@
+#include "prisma.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -11,10 +13,6 @@
 /* upper limit of 8MiB on map size */
 #define MAX_MAP_SIZE (1024 * 1024 * 8)
 #define READ_BLOCK_SIZE 8192
-
-#define EXIT_INIT_FAILED 1
-#define EXIT_ENV_FAILURE 2
-#define EXIT_INT_FAILURE 2
 
 struct screen {
 	int  width;
@@ -50,13 +48,7 @@ read_tileset(const char *path)
 	FILE *nfo = NULL;
 	int rc;
 
-	tiles = calloc(1, sizeof(struct tileset));
-	if (!tiles) {
-		fprintf(stderr, "failed to allocate memory: %s (error %d)\n",
-				strerror(errno), errno);
-		exit(EXIT_INT_FAILURE);
-	}
-
+	tiles = allocate(1, sizeof(struct tileset));
 	rc = asprintf(&p, "%s.png", path);
 	if (rc < 0) {
 		fprintf(stderr, "failed to allocate memory: %s (error %d)\n",
@@ -170,13 +162,7 @@ make_screen(const char *title, int w, int h, int scale)
 {
 	struct screen *s;
 
-	s = malloc(sizeof(struct screen));
-	if (!s) {
-		fprintf(stderr, "failed to allocate memory: %s (error %d)\n",
-				strerror(errno), errno);
-		exit(EXIT_INT_FAILURE);
-	}
-
+	s = allocate(1, sizeof(struct screen));
 	s->window = SDL_CreateWindow(
 		title,
 		SDL_WINDOWPOS_UNDEFINED,
@@ -264,13 +250,7 @@ s_readmap_raw(const char *path)
 		exit(EXIT_ENV_FAILURE);
 	}
 
-	raw = calloc(size + 1, sizeof(char));
-	if (!raw) {
-		fprintf(stderr, "failed to allocate memory: %s (error %d)\n",
-				strerror(errno), errno);
-		exit(EXIT_INT_FAILURE);
-	}
-
+	raw = allocate(size + 1, sizeof(char));
 	n = 0;
 	for (;;) {
 		nread = read(fd, raw + n, READ_BLOCK_SIZE > size ? size : READ_BLOCK_SIZE);
@@ -348,13 +328,7 @@ readmap(const char *path)
 	int x, y;
 
 	raw = s_readmap_raw(path);
-	map = calloc(1, sizeof(struct map));
-	if (!map) {
-		fprintf(stderr, "failed to allocate memory: %s (error %d)\n",
-				strerror(errno), errno);
-		exit(EXIT_INT_FAILURE);
-	}
-
+	map = allocate(1, sizeof(struct map));
 	s_mapsize(raw, &map->width, &map->height);
 	map->cells = calloc(map->width * map->height, sizeof(int));
 
