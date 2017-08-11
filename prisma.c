@@ -18,7 +18,7 @@
 void init()
 {
 	int rc;
-	rc = SDL_Init(SDL_INIT_VIDEO);
+	rc = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK);
 	if (rc != 0) {
 		fprintf(stderr, "sdl_init() failed: %s (rc=%d)\n", SDL_GetError(), rc);
 		exit(EXIT_INIT_FAILED);
@@ -28,6 +28,10 @@ void init()
 	if (rc != 0) {
 		fprintf(stderr, "img_init() failed: %s (rc=%d)\n", SDL_GetError(), rc);
 		exit(EXIT_INIT_FAILED);
+	}
+
+	if (SDL_NumJoysticks() > 0) {
+		SDL_JoystickOpen(0);
 	}
 }
 
@@ -48,7 +52,11 @@ void quit()
 #define TILE_A_TABLE       (55 << 24)
 #define TILE_A_CABINET     (56 << 24)
 
-#define HERO_AVATAR 0
+#define HERO_FRAMES 3
+#define HERO_DOWN  0
+#define HERO_RIGHT 3
+#define HERO_LEFT  6
+#define HERO_UP    9
 
 #define TILE_SOLID          0x01
 
@@ -71,7 +79,7 @@ int main(int argc, char **argv)
 	struct map     *map;
 	struct tileset *tiles, *sprites;
 	SDL_Event      e;
-	int xd, yd, done;
+	int xd, yd, done, hero, frame;
 
 	init();
 
@@ -89,41 +97,70 @@ int main(int argc, char **argv)
 
 	done = 0;
 	scr->x = scr->y = 3;
-	while (!done) {
+	for (frame = 0; !done; frame = (frame + 1) % (HERO_FRAMES - 1)) {
 		while (SDL_PollEvent(&e) != 0) {
 			switch (e.type) {
 			case SDL_QUIT:
 				done = 1;
 				break;
+
+			case SDL_JOYHATMOTION:
+				switch (e.jhat.value) {
+				case SDL_HAT_LEFT:      xd = -1;          break;
+				case SDL_HAT_LEFTUP:    xd = -1; yd = -1; break;
+				case SDL_HAT_LEFTDOWN:  xd = -1; yd =  1; break;
+				case SDL_HAT_RIGHT:     xd =  1;          break;
+				case SDL_HAT_RIGHTUP:   xd =  1; yd = -1; break;
+				case SDL_HAT_RIGHTDOWN: xd =  1; yd =  1; break;
+				case SDL_HAT_UP:                 yd = -1; break;
+				case SDL_HAT_DOWN:               yd =  1; break;
+				case SDL_HAT_CENTERED:  xd =  0; yd =  0; break;
+				}
+				break;
+
+			case SDL_JOYAXISMOTION:
+				switch (e.jaxis.axis) {
+				case 0: xd = e.jaxis.value < -4096 ? -1 :
+				             e.jaxis.value >  4096 ?  1 : 0; break;
+				case 1: yd = e.jaxis.value < -4096 ? -1 :
+				             e.jaxis.value >  4096 ?  1 : 0; break;
+				}
+				break;
+
+			case SDL_KEYUP:
+				switch (e.key.keysym.sym) {
+				case SDLK_UP:
+				case SDLK_DOWN:  yd =  0; break;
+				case SDLK_LEFT:
+				case SDLK_RIGHT: xd =  0; break;
+				}
+				break;
+
 			case SDL_KEYDOWN:
-				xd = yd = 0;
 				switch (e.key.keysym.sym) {
 				case SDLK_q:
 					done = 1;
 					break;
 
-				case SDLK_UP:
-					yd = -1;
-					break;
-				case SDLK_DOWN:
-					yd = 1;
-					break;
-				case SDLK_LEFT:
-					xd = -1;
-					break;
-				case SDLK_RIGHT:
-					xd = 1;
-					break;
+				case SDLK_UP:    yd = -1; break;
+				case SDLK_DOWN:  yd =  1; break;
+				case SDLK_LEFT:  xd = -1; break;
+				case SDLK_RIGHT: xd =  1; break;
 				}
-
-				if ((xd || yd) && !issolid(map, scr->x + xd, scr->y + yd)) {
-					scr->x += xd;
-					scr->y += yd;
-				}
+				break;
 			}
 		}
+
 		map_draw(map, scr);
-		draw_tile(scr, sprites, HERO_AVATAR,
+		if ((xd || yd) && !issolid(map, scr->x + xd, scr->y + yd)) {
+			scr->x += xd;
+			scr->y += yd;
+		}
+		hero = xd > 0 ? HERO_RIGHT
+		     : xd < 0 ? HERO_LEFT
+		     : yd < 0 ? HERO_UP
+		     :          HERO_DOWN;
+		draw_tile(scr, sprites, hero + (xd || yd ? frame + 1 : 0),
 			scr->x - bounded(0, scr->x - scr->width  / 2, map->width  - scr->width),
 			scr->y - bounded(0, scr->y - scr->height / 2, map->height - scr->height));
 
