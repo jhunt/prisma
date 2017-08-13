@@ -23,13 +23,22 @@
 #define T_KW_TILE    5
 #define T_KW_SOLID   6
 #define T_KW_VOID    7
-#define T_STRING     8
-#define T_NUMBER     9
-#define T_SYMBOL    10
-#define T_ERROR     11
+#define T_KW_PLACE   8
+#define T_KW_FROM    9
+#define T_STRING   128
+#define T_NUMBER   129
+#define T_SYMBOL   130
+#define T_ERROR    131
 
 #define T_ERROR_UNTERMINATED_STRING 1
 
+struct mapobj {
+	char symbol;
+	struct {
+		int x;
+		int y;
+	} at;
+};
 
 struct mapkey {
 	char *name;
@@ -38,6 +47,9 @@ struct mapkey {
 	int   default_tile;
 	char  void_tile;
 	int   tiles[256];
+
+	int next_object;
+	struct mapobj objects[256];
 };
 
 struct parser {
@@ -160,7 +172,10 @@ s_mapsize(const char *raw, int *w, int *h)
 void
 map_free(struct map *m)
 {
-	if (m) free(m->cells);
+	if (m) {
+		free(m->cells[0]);
+		free(m->cells[1]);
+	}
 	free(m);
 }
 
@@ -169,12 +184,18 @@ s_parse_map(const char *path, struct mapkey *key)
 {
 	char *raw, *p;
 	struct map *map;
-	int x, y;
+	int i, x, y;
 
 	raw = s_readmap(path);
 	map = allocate(1, sizeof(struct map));
+	fprintf(stderr, "reading tiles from %s\n", key->tileset);
+	map->tiles = tileset_read(key->tileset);
+	if (!map->tiles) {
+		fprintf(stderr, "TILE READ FAILED\n");
+	}
 	s_mapsize(raw, &map->width, &map->height);
-	map->cells = calloc(map->width * map->height, sizeof(int));
+	map->cells[0] = calloc(map->width * map->height, sizeof(int));
+	map->cells[1] = calloc(map->width * map->height, sizeof(int));
 
 	/* decode the newline-terminated map into a cell-list */
 	for (x = y = 0, p = raw; *p; p++) {
@@ -184,12 +205,19 @@ s_parse_map(const char *path, struct mapkey *key)
 		}
 
 		if (*p == key->void_tile) {
-			mapat(map, x++, y) = 0x00; /* NONE */
+			mapat(map, 0, x++, y) = 0x00; /* NONE */
 		} else {
-			mapat(map, x++, y) = key->tiles[(int)*p]
+			mapat(map, 0, x++, y) = key->tiles[(int)*p]
 			                   ? key->tiles[(int)*p]
 			                   : key->default_tile;
 		}
+	}
+
+	for (i = 0; i < key->next_object; i++) {
+		mapat(map, 1, key->objects[i].at.x,
+		              key->objects[i].at.y) = key->tiles[(int)key->objects[i].symbol]
+		                                    ? key->tiles[(int)key->objects[i].symbol]
+		                                    : 0x00; /* NONE */
 	}
 
 	free(raw);
@@ -203,6 +231,7 @@ s_parse_mapkey(const char *path)
 	struct mapkey *m;
 	off_t len;
 	int token, solid, idx;
+	int x, y;
 
 	p.file = path;
 	p.fd = open(p.file, O_RDONLY);
@@ -295,6 +324,51 @@ s_parse_mapkey(const char *path)
 			}
 			m->tiles[idx] = solid ? ((1 + p.data.number) << 24) | 0x01
 			                      : ((1 + p.data.number) << 24);
+			break;
+
+		case T_KW_FROM:
+			token = s_lexer(&p);
+			if (token != T_NUMBER) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "The `from' keyword requires both an X and Y coordinate, as numbers\n");
+				goto fail;
+			}
+			x = p.data.number;
+
+			token = s_lexer(&p);
+			if (token != T_NUMBER) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "The `from' keyword requires both an X and Y coordinate, as numbers\n");
+				goto fail;
+			}
+			y = p.data.number;
+			break;
+
+		case T_KW_PLACE:
+			token = s_lexer(&p);
+			if (token != T_SYMBOL) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "The `place' keyword requires a symbol, and X + Y coordinates\n");
+				goto fail;
+			}
+			m->objects[m->next_object].symbol = p.data.symbol;
+
+			token = s_lexer(&p);
+			if (token != T_NUMBER) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "The `place' keyword requires a symbol, and X + Y coordinates\n");
+				goto fail;
+			}
+			m->objects[m->next_object].at.x = p.data.number + x;
+
+			token = s_lexer(&p);
+			if (token != T_NUMBER) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "The `place' keyword requires a symbol, and X + Y coordinates\n");
+				goto fail;
+			}
+			m->objects[m->next_object].at.y = p.data.number + y;
+			m->next_object++;
 			break;
 
 		case T_KW_EMPTY:
@@ -442,6 +516,21 @@ again:
 			return T_NUMBER;
 		}
 
+		if (s_char(p) == '"') {
+			p->data.error = T_ERROR_UNTERMINATED_STRING;
+			s_next(p);
+			if (s_done(p)) return T_ERROR;
+			while (s_char(p) != '"') {
+				if (s_char(p) == '\\') {
+					s_next(p);
+					if (s_done(p)) return T_ERROR;
+				}
+				s_next(p);
+			}
+			s_qstring(p);
+			s_next(p);
+			return T_STRING;
+		}
 		if (s_graph(p)) {
 			if (isspace(s_peek(p))) {
 				p->data.symbol = s_char(p);
@@ -456,27 +545,13 @@ again:
 			if (s_keyword(p, "default")) { s_next(p); return T_KW_DEFAULT; }
 			if (s_keyword(p, "empty"))   { s_next(p); return T_KW_EMPTY;   }
 			if (s_keyword(p, "solid"))   { s_next(p); return T_KW_SOLID;   }
+			if (s_keyword(p, "place"))   { s_next(p); return T_KW_PLACE;   }
+			if (s_keyword(p, "from"))    { s_next(p); return T_KW_FROM;    }
 			if (s_keyword(p, "tile"))    { s_next(p); return T_KW_TILE;    }
 			if (s_keyword(p, "void"))    { s_next(p); return T_KW_VOID;    }
 			if (s_keyword(p, "map"))     { s_next(p); return T_KW_MAP;     }
 
 			s_string(p);
-			s_next(p);
-			return T_STRING;
-		}
-
-		if (s_char(p) == '"') {
-			p->data.error = T_ERROR_UNTERMINATED_STRING;
-			s_next(p);
-			if (s_done(p)) return T_ERROR;
-			while (s_char(p) != '"') {
-				if (s_char(p) == '\\') {
-					s_next(p);
-					if (s_done(p)) return T_ERROR;
-				}
-				s_next(p);
-			}
-			s_qstring(p);
 			s_next(p);
 			return T_STRING;
 		}
@@ -512,11 +587,16 @@ map_draw(struct map *map, struct screen *scr)
 	for (x = 0; x < scr->width; x++) {
 		for (y = 0; y < scr->height; y++) {
 			if (inmap(map, x+cx, y+cy)) {
-				int t = mapat(map, x+cx, y+cy);
+				int t = mapat(map, 0, x+cx, y+cy);
 				if (istile(t)) {
 					draw_tile(scr, map->tiles, (t >> 24) - 1, x, y);
 				} else {
 					draw_tile(scr, map->tiles, 22, x, y);
+				}
+
+				t = mapat(map, 1, x+cx, y+cy);
+				if (istile(t)) {
+					draw_tile(scr, map->tiles, (t >> 24) - 1, x, y);
 				}
 			} else {
 				draw_tile(scr, map->tiles, 22, x, y);

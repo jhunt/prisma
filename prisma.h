@@ -57,7 +57,7 @@ struct tileset {
 };
 
 struct map {
-	int *cells;
+	int *cells[2];
 
 	int  width;
 	int  height;
@@ -73,8 +73,8 @@ void            screen_draw(struct screen * screen);
 struct tileset * tileset_read(const char * path);
 void             tileset_free(struct tileset * tiles);
 
-#define mapat(map,x,y) \
-          ((map)->cells[(map)->height * (x) + (y)])
+#define mapat(map,i,x,y) \
+          ((map)->cells[i][(map)->height * (x) + (y)])
 struct map * map_read(const char * path);
 void         map_draw(struct map * map, struct screen * screen);
 void         map_free(struct map * map);

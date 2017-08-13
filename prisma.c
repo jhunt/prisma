@@ -70,14 +70,16 @@ inmap(struct map *map, int x, int y)
 static int
 issolid(struct map *map, int x, int y)
 {
-	return !inmap(map, x, y) || mapat(map, x, y) & TILE_SOLID;
+	return !inmap(map, x, y)
+	    || mapat(map, 0, x, y) & TILE_SOLID
+	    || mapat(map, 1, x, y);
 }
 
 int main(int argc, char **argv)
 {
 	struct screen  *scr;
 	struct map     *map;
-	struct tileset *tiles, *sprites;
+	struct tileset *sprites;
 	SDL_Event      e;
 	int xd, yd, done, hero, frame;
 
@@ -89,10 +91,8 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	tiles   = tileset_read("assets/tileset");
 	sprites = tileset_read("assets/purple-hair-sprite");
 	map     = map_read("maps/base");
-	map->tiles = tiles;
 	screen_use_map(scr, map, 4);
 
 	done = 0;

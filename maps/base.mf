@@ -1,5 +1,5 @@
-map "base"
-tileset "castle1"
+map "Castle Demo"
+tileset "assets/tileset"
 default 8
 void #
 tile solid + 3  ;; top corner
@@ -10,6 +10,41 @@ tile solid c 55 ;; cabinet
 tile solid n 54 ;; table
 tile solid u 27 ;; jar
 tile empty x 17 ;; carpet
+tile empty . 9  ;; carpet
+tile solid $ 44 ;; chest
+tile empty o 68 ;; coins
+tile empty J 69 ;; jewels
 
-;;layer 1
-;;layer 2
+from 1 1
+place n 0 0
+place n 1 0
+place n 2 0
+
+from 4 4
+place u 0 0
+place u 1 0
+place u 2 0
+place u 3 0
+
+from 12 4
+place n 0 0
+place n 1 0
+place n 2 0
+
+from 0 0
+place c 6  1
+place c 9  2
+place c 12 1
+place c 15 2
+place c 18 1
+
+place J 14 13
+place J 18 15
+place J 23 15
+place J 24 14
+place J 25 15
+place o 21 13
+place o 17 14
+place o 18 14
+place o 19 16
+place o 20 16
