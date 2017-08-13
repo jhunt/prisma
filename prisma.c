@@ -97,6 +97,7 @@ int main(int argc, char **argv)
 
 	done = 0;
 	scr->x = scr->y = 3;
+	xd = yd = 0;
 	for (frame = 0; !done; frame = (frame + 1) % (HERO_FRAMES - 1)) {
 		while (SDL_PollEvent(&e) != 0) {
 			switch (e.type) {
@@ -104,22 +105,20 @@ int main(int argc, char **argv)
 				done = 1;
 				break;
 
+			case SDL_JOYDEVICEADDED:
+				SDL_JoystickOpen(e.jdevice.which);
+				break;
+
 			case SDL_JOYHATMOTION:
-				switch (e.jhat.value) {
-				case SDL_HAT_LEFT:      xd = -1;          break;
-				case SDL_HAT_LEFTUP:    xd = -1; yd = -1; break;
-				case SDL_HAT_LEFTDOWN:  xd = -1; yd =  1; break;
-				case SDL_HAT_RIGHT:     xd =  1;          break;
-				case SDL_HAT_RIGHTUP:   xd =  1; yd = -1; break;
-				case SDL_HAT_RIGHTDOWN: xd =  1; yd =  1; break;
-				case SDL_HAT_UP:                 yd = -1; break;
-				case SDL_HAT_DOWN:               yd =  1; break;
-				case SDL_HAT_CENTERED:  xd =  0; yd =  0; break;
-				}
+				xd = yd = 0;
+				if (e.jhat.value & SDL_HAT_LEFT)  xd = -1;
+				if (e.jhat.value & SDL_HAT_RIGHT) xd =  1;
+				if (e.jhat.value & SDL_HAT_UP)    yd = -1;
+				if (e.jhat.value & SDL_HAT_DOWN)  yd =  1;
 				break;
 
 			case SDL_JOYAXISMOTION:
-				switch (e.jaxis.axis) {
+				switch (e.jaxis.axis % 2) {
 				case 0: xd = e.jaxis.value < -4096 ? -1 :
 				             e.jaxis.value >  4096 ?  1 : 0; break;
 				case 1: yd = e.jaxis.value < -4096 ? -1 :
@@ -130,9 +129,9 @@ int main(int argc, char **argv)
 			case SDL_KEYUP:
 				switch (e.key.keysym.sym) {
 				case SDLK_UP:
-				case SDLK_DOWN:  yd =  0; break;
+				case SDLK_DOWN:  yd = 0; break;
 				case SDLK_LEFT:
-				case SDLK_RIGHT: xd =  0; break;
+				case SDLK_RIGHT: xd = 0; break;
 				}
 				break;
 
