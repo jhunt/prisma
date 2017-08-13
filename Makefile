@@ -8,4 +8,4 @@ prisma: prisma.o map.o screen.o tiles.o util.o
 joy: joy.o
 
 clean:
-	rm -fr prisma joy *.o
+	rm -fr prisma joy *.o *.dSYM/
