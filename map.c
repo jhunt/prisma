@@ -1,6 +1,7 @@
 #include "prisma.h"
 
 #include <unistd.h>
+#include <sys/mman.h>
 #include <fcntl.h>
 
 /* upper limit of 8MiB on map size */
@@ -8,20 +9,60 @@
 #define READ_BLOCK_SIZE 8192
 
 
-#define TILE_NONE            0
-#define TILE_A_TOP_WALL    ( 1 << 24)
-#define TILE_A_SIDE_WALL   ( 2 << 24)
-#define TILE_A_BOTTOM_WALL ( 3 << 24)
-#define TILE_A_TOP_CORNER  ( 4 << 24)
-#define TILE_A_FLOOR       ( 9 << 24)
-#define TILE_A_CARPET      (18 << 24)
-#define TILE_A_WHOLE_JAR   (28 << 24)
-#define TILE_A_TABLE       (55 << 24)
-#define TILE_A_CABINET     (56 << 24)
+#define TILE_NONE      0
+#define TILE_SOLID  0x01
 
 #define HERO_AVATAR 0
 
-#define TILE_SOLID          0x01
+
+#define T_EOF        0
+#define T_KW_MAP     1
+#define T_KW_TILESET 2
+#define T_KW_DEFAULT 3
+#define T_KW_EMPTY   4
+#define T_KW_TILE    5
+#define T_KW_SOLID   6
+#define T_KW_VOID    7
+#define T_STRING     8
+#define T_NUMBER     9
+#define T_SYMBOL    10
+#define T_ERROR     11
+
+#define T_ERROR_UNTERMINATED_STRING 1
+
+
+struct mapkey {
+	char *name;
+	char *tileset;
+
+	int   default_tile;
+	char  void_tile;
+	int   tiles[256];
+};
+
+struct parser {
+	int     fd;
+	size_t  len;
+
+	const char *file;
+	int         line;
+	int         column;
+
+	size_t  there;
+	size_t  here;
+	char   *source;
+
+	union {
+		char *string;
+		int   number;
+		char  symbol;
+		int   error;
+	} data;
+};
+
+static struct map *    s_parse_map(const char *, struct mapkey *);
+static struct mapkey * s_parse_mapkey(const char *);
+static int             s_lexer(struct parser *);
 
 static int inmap(struct map *map, int x, int y);
 static int istile(int t);
@@ -123,8 +164,8 @@ map_free(struct map *m)
 	free(m);
 }
 
-struct map *
-map_read(const char *path)
+static struct map *
+s_parse_map(const char *path, struct mapkey *key)
 {
 	char *raw, *p;
 	struct map *map;
@@ -137,23 +178,324 @@ map_read(const char *path)
 
 	/* decode the newline-terminated map into a cell-list */
 	for (x = y = 0, p = raw; *p; p++) {
-		switch (*p) {
-		case '\n': x = 0; y++; break;
-		case '+': mapat(map, x++, y) = TILE_A_TOP_CORNER  | TILE_SOLID; break;
-		case '-': mapat(map, x++, y) = TILE_A_TOP_WALL    | TILE_SOLID; break;
-		case '=': mapat(map, x++, y) = TILE_A_BOTTOM_WALL | TILE_SOLID; break;
-		case '|': mapat(map, x++, y) = TILE_A_SIDE_WALL   | TILE_SOLID; break;
-		case 'c': mapat(map, x++, y) = TILE_A_CABINET     | TILE_SOLID; break;
-		case 'u': mapat(map, x++, y) = TILE_A_WHOLE_JAR   | TILE_SOLID; break;
-		case 'n': mapat(map, x++, y) = TILE_A_TABLE       | TILE_SOLID; break;
-		case ' ': mapat(map, x++, y) = TILE_A_FLOOR;                    break;
-		case 'x': mapat(map, x++, y) = TILE_A_CARPET;                   break;
-		default:  mapat(map, x++, y) = TILE_NONE;                       break;
+		if (*p == '\n') {
+			x = 0; y++;
+			continue;
+		}
+
+		if (*p == key->void_tile) {
+			mapat(map, x++, y) = 0x00; /* NONE */
+		} else {
+			mapat(map, x++, y) = key->tiles[(int)*p]
+			                   ? key->tiles[(int)*p]
+			                   : key->default_tile;
 		}
 	}
 
 	free(raw);
 	return map;
+}
+
+static struct mapkey *
+s_parse_mapkey(const char *path)
+{
+	struct parser p;
+	struct mapkey *m;
+	off_t len;
+	int token, solid, idx;
+
+	p.file = path;
+	p.fd = open(p.file, O_RDONLY);
+	if (p.fd < 0) goto fail;
+
+	len = lseek(p.fd, 0, SEEK_END);
+	if (len < 0) goto fail;
+	lseek(p.fd, 0, SEEK_SET);
+
+	p.len = len;
+	p.source = mmap(NULL, len, PROT_READ, MAP_PRIVATE, p.fd, 0);
+	if (p.source == MAP_FAILED) goto fail;
+
+	p.line = 1;
+	p.column = 1;
+	p.here = p.there = 0;
+	m = allocate(1, sizeof(*m));
+
+	for (;;) {
+		token = s_lexer(&p);
+		if (token == T_EOF) break;
+
+		switch (token) {
+		case T_KW_MAP:
+			token = s_lexer(&p);
+			if (token != T_STRING) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "The `map' keyword MUST be followed by the name of the map (as a string)\n");
+				goto fail;
+			}
+			free(m->name);
+			m->name = p.data.string;
+			break;
+
+		case T_KW_TILESET:
+			token = s_lexer(&p);
+			if (token != T_STRING) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "The `tileset' keyword MUST be followed by the path to the tileset (as a string)\n");
+				goto fail;
+			}
+			free(m->tileset);
+			m->tileset = p.data.string;
+			break;
+
+		case T_KW_DEFAULT:
+			token = s_lexer(&p);
+			if (token != T_NUMBER) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "The `default' keyword MUST be followed by a tile index number\n");
+				goto fail;
+			}
+			m->default_tile = ((1 + p.data.number) << 24);
+			break;
+
+		case T_KW_VOID:
+			token = s_lexer(&p);
+			if (token != T_SYMBOL) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "The `void' keyword MUST be followed by a tile symbol (a single character)\n");
+				goto fail;
+			}
+			m->void_tile = p.data.symbol;
+			break;
+
+		case T_KW_TILE:
+			token = s_lexer(&p);
+			switch (token) {
+			case T_KW_SOLID: solid = 1; break;
+			case T_KW_EMPTY: solid = 0; break;
+			default:
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "The `tile` keyword MUST be followed by either the `solid' keyword or the `empty' keyword\n");
+				goto fail;
+			}
+
+			token = s_lexer(&p);
+			if (token != T_SYMBOL) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "Tiles must be defined `tile (solid|empty) SYMBOL INDEX', where SYMBOL is the tile symbol (a single character)\n");
+				goto fail;
+			}
+			idx = (int)(p.data.symbol);
+
+			token = s_lexer(&p);
+			if (token != T_NUMBER) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "Tiles must be defined `tile (solid|empty) SYMBOL INDEX', where INDEX is the tile index (a number)\n");
+				goto fail;
+			}
+			m->tiles[idx] = solid ? ((1 + p.data.number) << 24) | 0x01
+			                      : ((1 + p.data.number) << 24);
+			break;
+
+		case T_KW_EMPTY:
+			fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+			fprintf(stderr, "Unexpected `empty' keyword found (`empty' MUST follow `tile')\n");
+			goto fail;
+
+		case T_KW_SOLID:
+			fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+			fprintf(stderr, "Unexpected `solid' keyword found (`solid' MUST follow `tile')\n");
+			goto fail;
+
+		case T_STRING:
+			fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+			fprintf(stderr, "Unexpected string \"%s\" found.\n", p.data.string);
+			free(p.data.string);
+			goto fail;
+
+		case T_NUMBER:
+			fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+			fprintf(stderr, "Unexpected number '%d' found.\n", p.data.number);
+			goto fail;
+
+		case T_SYMBOL:
+			fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+			fprintf(stderr, "Unexpected symbol '%c' found.\n", p.data.symbol);
+			goto fail;
+
+		case T_ERROR:
+			fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+			fprintf(stderr, "ERROR: %d\n", p.data.error);
+			goto fail;
+
+		default:
+			fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+			fprintf(stderr, "UNKNOWN TOKEN %d\n", token);
+			goto fail;
+		}
+	}
+
+	return m;
+
+fail:
+	fprintf(stderr, "failed: %s (error %d)\ncleaning up...\n",
+		strerror(errno), errno);
+	if (p.source && p.source != MAP_FAILED)
+		munmap(p.source, p.len);
+	if (p.fd >= 0)
+		close(p.fd);
+	return NULL;
+}
+
+#define s_char(p)   ((p)->source[(p)->here])
+#define s_space(p)  (isspace(s_char(p)))
+#define s_number(p) (isdigit(s_char(p)))
+#define s_graph(p)  (isgraph(s_char(p)))
+
+#define s_done(p) ((p)->here == (p)->len)
+#define s_keyword(p,w) (memcmp((p)->source + (p)->there, w, strlen(w)) == 0)
+
+static inline void
+s_next(struct parser *p) {
+	//fprintf(stderr, "p[%lu] = '%c' (%d)\n", p->here, p->source[p->here], p->source[p->here]);
+
+	if (s_char(p) == '\n') {
+		p->line++;
+		p->column = 0;
+	}
+	p->here++;
+	p->column++;
+}
+
+static inline void
+s_skip(struct parser *p) {
+	s_next(p);
+	p->there++;
+}
+
+static inline char
+s_peek(struct parser *p)
+{
+	if (s_done(p)) return '\n';
+	return p->source[p->here+1];
+}
+
+static inline void
+s_stringat(struct parser *p, int a, int b)
+{
+	p->data.string = allocate(b - a + 2, sizeof(char));
+	memcpy(p->data.string, p->source + a, b - a + 1);
+}
+
+static inline void
+s_string(struct parser *p)
+{
+	s_stringat(p, p->there, p->here);
+}
+
+static inline void
+s_qstring(struct parser *p)
+{
+	char *a, *b;
+
+	s_stringat(p, p->there + 1, p->here - 1);
+
+	/* collapse backslash-escape sequences */
+	a = b = p->data.string;
+	while (*b) {
+		if (*b == '\\') b++;
+		*a++ = *b++;
+	}
+	*a = '\0';
+}
+
+static int
+s_lexer(struct parser *p)
+{
+	if (s_done(p)) return T_EOF;
+	p->there = p->here;
+
+	for (;;) {
+again:
+		/* skip comments to end of line */
+		if (s_char(p) == ';' && s_peek(p) == ';') {
+			while (s_char(p) != '\n') s_skip(p);
+			s_skip(p);
+			if (s_done(p)) return T_EOF;
+			goto again;
+		}
+
+		/* skip leading whitespace */
+		while (s_space(p)) {
+			s_skip(p);
+			if (s_done(p)) return T_EOF;
+			goto again;
+		}
+
+		if (s_number(p)) {
+			p->data.number = 0;
+			while (!s_done(p) && s_number(p)) {
+				p->data.number = (p->data.number * 10)
+				               + (s_char(p) - '0');
+				s_next(p);
+			}
+			return T_NUMBER;
+		}
+
+		if (s_graph(p)) {
+			if (isspace(s_peek(p))) {
+				p->data.symbol = s_char(p);
+				s_next(p);
+				return T_SYMBOL;
+			}
+
+			while (isgraph(s_peek(p)))
+				s_next(p);
+
+			if (s_keyword(p, "tileset")) { s_next(p); return T_KW_TILESET; }
+			if (s_keyword(p, "default")) { s_next(p); return T_KW_DEFAULT; }
+			if (s_keyword(p, "empty"))   { s_next(p); return T_KW_EMPTY;   }
+			if (s_keyword(p, "solid"))   { s_next(p); return T_KW_SOLID;   }
+			if (s_keyword(p, "tile"))    { s_next(p); return T_KW_TILE;    }
+			if (s_keyword(p, "void"))    { s_next(p); return T_KW_VOID;    }
+			if (s_keyword(p, "map"))     { s_next(p); return T_KW_MAP;     }
+
+			s_string(p);
+			s_next(p);
+			return T_STRING;
+		}
+
+		if (s_char(p) == '"') {
+			p->data.error = T_ERROR_UNTERMINATED_STRING;
+			s_next(p);
+			if (s_done(p)) return T_ERROR;
+			while (s_char(p) != '"') {
+				if (s_char(p) == '\\') {
+					s_next(p);
+					if (s_done(p)) return T_ERROR;
+				}
+				s_next(p);
+			}
+			s_qstring(p);
+			s_next(p);
+			return T_STRING;
+		}
+	}
+	return T_EOF;
+}
+
+struct map *
+map_read(const char *path)
+{
+	char *p;
+	struct mapkey *key;
+
+	p = astring("%s.mf", path);
+	key = s_parse_mapkey(p);
+	free(p);
+	if (!key) return NULL;
+
+	return s_parse_map(path, key);
 }
 
 void

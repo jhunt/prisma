@@ -1,0 +1,15 @@
+map "base"
+tileset "castle1"
+default 8
+void #
+tile solid + 3  ;; top corner
+tile solid - 0  ;; top wall
+tile solid | 1  ;; side wall
+tile solid = 2  ;; bottom wall
+tile solid c 55 ;; cabinet
+tile solid n 54 ;; table
+tile solid u 27 ;; jar
+tile empty x 17 ;; carpet
+
+;;layer 1
+;;layer 2
