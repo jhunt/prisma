@@ -15,6 +15,7 @@ int main(int argc, char **argv)
 	SDL_Joystick *joy;
 	SDL_Joystick *all[MAX_JOYSTICKS];
 	SDL_Event e;
+	char guid[256];
 
 	SDL_Init(SDL_INIT_JOYSTICK);
 
@@ -22,7 +23,9 @@ int main(int argc, char **argv)
 	printf("%d joysticks found\n", n);
 	for (i = 0; i < n; i++) {
 		joy = SDL_JoystickOpen(i);
-		printf("[%d] %s\n", i, SDL_JoystickName(joy));
+		fprintf(stderr, "[%d] %s\n", i, SDL_JoystickName(joy));
+		SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joy), guid, 256);
+		fprintf(stderr, "[%d] %s (%s)\n", e.jdevice.which, SDL_JoystickName(joy), guid);
 		if (SDL_JoystickGetAttached(joy)) {
 			SDL_JoystickClose(joy);
 		}
@@ -50,7 +53,8 @@ int main(int argc, char **argv)
 					                e.jdevice.which, MAX_JOYSTICKS);
 				} else {
 					joy = SDL_JoystickOpen(e.jdevice.which);
-					fprintf(stderr, "[%d] %s\n", e.jdevice.which, SDL_JoystickName(joy));
+					SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joy), guid, 256);
+					fprintf(stderr, "[%d] %s (%s)\n", e.jdevice.which, SDL_JoystickName(joy), guid);
 					all[e.jdevice.which] = joy;
 				}
 				break;
