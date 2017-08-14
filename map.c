@@ -179,6 +179,15 @@ map_free(struct map *m)
 	free(m);
 }
 
+int
+map_solid(struct map *m, int x, int y)
+{
+	return x < 0 || x > m->width
+	    || y < 0 || y > m->height
+	    || mapat(m, 0, x, y) & TILE_SOLID
+	    || mapat(m, 1, x, y);
+}
+
 static struct map *
 s_parse_map(const char *path, struct mapkey *key)
 {

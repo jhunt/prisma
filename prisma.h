@@ -30,13 +30,6 @@ void * astring(const char *fmt, ...);
 
 int bounded(int min, int v, int max);
 
-
-#define MAP_LAYERS 4
-#define MAP_LAYER_BG      0
-#define MAP_LAYER_WORLD   1
-#define MAP_LAYER_OBJECT  2
-#define MAP_LAYER_SPRITE  3
-
 struct screen {
 	int  width;
 	int  height;
@@ -67,6 +60,24 @@ struct map {
 	struct tileset *tiles;
 };
 
+struct coords {
+	int x;
+	int y;
+};
+
+struct sprite {
+	struct tileset *tileset;
+	int tile;
+	int frame;
+
+	struct coords at;
+	struct coords delta;
+};
+
+int  sprite_moving(struct sprite *sprite);
+void sprite_collide(struct sprite *sprite, struct map *map, struct screen *screen);
+int  sprite_tile(struct sprite *sprite);
+
 struct screen * screen_make(const char *title, int w, int h);
 void            screen_free(struct screen * screen);
 void            screen_use_map(struct screen * s, struct map * map, int scale);
@@ -80,6 +91,7 @@ void             tileset_free(struct tileset * tiles);
 struct map * map_read(const char * path);
 void         map_draw(struct map * map, struct screen * screen);
 void         map_free(struct map * map);
+int          map_solid(struct map * map, int x, int y);
 
 void draw_tile(struct screen * screen, struct tileset* tiles, int t, int x, int y);
 
