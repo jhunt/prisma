@@ -142,7 +142,6 @@ int main(int argc, char **argv)
 		int cx = bounded(0, scr->x - scr->width  / 2, map->width  - scr->width);
 		int cy = bounded(0, scr->y - scr->height / 2, map->height - scr->height);
 		tile2pixel(&cx, &cy, scr, map);
-		printf("cx,cy = (%d, %d)\n", cx, cy);
 		if (cx > hero->at.x) cx = hero->at.x;
 		if (cy > hero->at.y) cy = hero->at.y;
 

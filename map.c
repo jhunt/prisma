@@ -626,8 +626,6 @@ map_draw(struct map *map, struct screen *scr)
 	int x, y;
 	int cx = bounded(0, scr->x - scr->width  / 2, map->width  - scr->width);
 	int cy = bounded(0, scr->y - scr->height / 2, map->height - scr->height);
-	fprintf(stderr, "screen origin at (%d, %d), range (0,0) .. (%d, %d)\n",
-			cx, cy, map->width  - scr->width, map->height - scr->height);
 
 	for (x = 0; x <= scr->width; x++) {
 		for (y = 0; y <= scr->height; y++) {
