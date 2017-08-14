@@ -41,3 +41,10 @@ bounded(int min, int v, int max)
 	if (v > max) return max;
 	return v;
 }
+
+int analog(int v)
+{
+	if (v >  ANALOG_TOLERANCE) return 1;
+	if (v < -ANALOG_TOLERANCE) return -1;
+	return 0;
+}

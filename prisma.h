@@ -30,6 +30,9 @@ void * astring(const char *fmt, ...);
 
 int bounded(int min, int v, int max);
 
+#define ANALOG_TOLERANCE 4096
+int analog(int v);
+
 struct screen {
 	int  width;
 	int  height;
@@ -77,6 +80,9 @@ struct sprite {
 int  sprite_moving(struct sprite *sprite);
 void sprite_collide(struct sprite *sprite, struct map *map, struct screen *screen);
 int  sprite_tile(struct sprite *sprite);
+void sprite_move_x(struct sprite *sprite, int x);
+void sprite_move_y(struct sprite *sprite, int y);
+void sprite_move_all(struct sprite *sprite, int left, int right, int up, int down);
 
 struct screen * screen_make(const char *title, int w, int h);
 void            screen_free(struct screen * screen);

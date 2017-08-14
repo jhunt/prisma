@@ -96,29 +96,26 @@ int main(int argc, char **argv)
 				break;
 
 			case SDL_JOYHATMOTION:
-				hero->delta.x = 0;
-				hero->delta.y = 0;
-				if (e.jhat.value & SDL_HAT_LEFT)  hero->delta.x = -1;
-				if (e.jhat.value & SDL_HAT_RIGHT) hero->delta.x =  1;
-				if (e.jhat.value & SDL_HAT_UP)    hero->delta.y = -1;
-				if (e.jhat.value & SDL_HAT_DOWN)  hero->delta.y =  1;
+				sprite_move_all(hero,
+					e.jhat.value & SDL_HAT_LEFT,
+					e.jhat.value & SDL_HAT_RIGHT,
+					e.jhat.value & SDL_HAT_UP,
+					e.jhat.value & SDL_HAT_DOWN);
 				break;
 
 			case SDL_JOYAXISMOTION:
 				switch (e.jaxis.axis % 2) {
-				case 0: hero->delta.x = e.jaxis.value < -4096 ? -1 :
-				                          e.jaxis.value >  4096 ?  1 : 0; break;
-				case 1: hero->delta.y = e.jaxis.value < -4096 ? -1 :
-				                          e.jaxis.value >  4096 ?  1 : 0; break;
+				case 0: sprite_move_x(hero, analog(e.jaxis.value)); break;
+				case 1: sprite_move_y(hero, analog(e.jaxis.value)); break;
 				}
 				break;
 
 			case SDL_KEYUP:
 				switch (e.key.keysym.sym) {
 				case SDLK_UP:
-				case SDLK_DOWN:  hero->delta.y = 0; break;
+				case SDLK_DOWN:  sprite_move_y(hero, 0); break;
 				case SDLK_LEFT:
-				case SDLK_RIGHT: hero->delta.x = 0; break;
+				case SDLK_RIGHT: sprite_move_x(hero, 0); break;
 				}
 				break;
 
@@ -128,10 +125,10 @@ int main(int argc, char **argv)
 					done = 1;
 					break;
 
-				case SDLK_UP:    hero->delta.y = -1; break;
-				case SDLK_DOWN:  hero->delta.y =  1; break;
-				case SDLK_LEFT:  hero->delta.x = -1; break;
-				case SDLK_RIGHT: hero->delta.x =  1; break;
+				case SDLK_UP:    sprite_move_y(hero, -1); break;
+				case SDLK_DOWN:  sprite_move_y(hero,  1); break;
+				case SDLK_LEFT:  sprite_move_x(hero, -1); break;
+				case SDLK_RIGHT: sprite_move_x(hero,  1); break;
 				}
 				break;
 			}

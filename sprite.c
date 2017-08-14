@@ -34,3 +34,23 @@ int sprite_tile(struct sprite *sprite)
 	sprite->frame = (sprite->frame + 1) % (3 - 1);
 	return t;
 }
+
+void sprite_move_x(struct sprite *sprite, int x)
+{
+	sprite->delta.x = x;
+}
+
+void sprite_move_y(struct sprite *sprite, int y)
+{
+	sprite->delta.y = y;
+}
+
+void sprite_move_all(struct sprite *sprite, int left, int right, int up, int down)
+{
+	sprite->delta.x = 0;
+	sprite->delta.y = 0;
+	if (left)  sprite->delta.x = -1;
+	if (right) sprite->delta.x =  1;
+	if (up)    sprite->delta.y = -1;
+	if (down)  sprite->delta.y =  1;
+}
