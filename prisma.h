@@ -98,7 +98,12 @@ struct map * map_read(const char * path);
 void         map_draw(struct map * map, struct screen * screen);
 void         map_free(struct map * map);
 int          map_solid(struct map * map, int x, int y);
+int          map_collide(struct map * map, struct screen * screen, int x, int y);
 
-void draw_tile(struct screen * screen, struct tileset* tiles, int t, int x, int y);
+void draw_at(struct screen * screen, struct tileset* tiles, int t, int x, int y);
+void draw_tile(struct screen * screen, struct map* map, int t, int x, int y);
+
+void pixel2tile(int *x, int *y, struct screen *scr, struct map *map);
+void tile2pixel(int *x, int *y, struct screen *scr, struct map *map);
 
 #endif

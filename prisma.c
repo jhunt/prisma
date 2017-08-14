@@ -82,6 +82,7 @@ int main(int argc, char **argv)
 
 	hero->at.x = 3;
 	hero->at.y = 3;
+	tile2pixel(&hero->at.x, &hero->at.y, scr, map);
 
 	done = 0;
 	while (!done) {
@@ -134,15 +135,21 @@ int main(int argc, char **argv)
 			}
 		}
 
-		map_draw(map, scr);
+		/* FIXME: this is hacky as hell, and needs map+screen changes */
 		sprite_collide(hero, map, scr);
-		scr->x = hero->at.x; scr->y = hero->at.y; /* FIXME */
-		draw_tile(scr, sprites, sprite_tile(hero),
-			hero->at.x - bounded(0, hero->at.x - scr->width  / 2, map->width  - scr->width),
-			hero->at.y - bounded(0, hero->at.y - scr->height / 2, map->height - scr->height));
+		scr->x = hero->at.x; scr->y = hero->at.y;
+		pixel2tile(&scr->x, &scr->y, scr, map);
+		int cx = bounded(0, scr->x - scr->width  / 2, map->width  - scr->width);
+		int cy = bounded(0, scr->y - scr->height / 2, map->height - scr->height);
+		tile2pixel(&cx, &cy, scr, map);
+		printf("cx,cy = (%d, %d)\n", cx, cy);
+		if (cx > hero->at.x) cx = hero->at.x;
+		if (cy > hero->at.y) cy = hero->at.y;
 
+		map_draw(map, scr);
+		draw_at(scr, sprites, sprite_tile(hero), hero->at.x - cx, hero->at.y - cy);
 		screen_draw(scr);
-		SDL_Delay(150);
+		SDL_Delay(16);
 	}
 
 	map_free(map);

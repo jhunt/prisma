@@ -7,12 +7,29 @@ int sprite_moving(struct sprite *sprite)
 
 void sprite_collide(struct sprite *sprite, struct map *map, struct screen *screen)
 {
-	if (sprite->delta.x && !map_solid(map, sprite->at.x + sprite->delta.x, sprite->at.y)) {
-		sprite->at.x += sprite->delta.x;
+	int x, y;
+
+	x = sprite->at.x;
+	y = sprite->at.y;
+
+	if (sprite->delta.x) {
+		x += sprite->delta.x;
+		if (x < 0) x = 0;
+		if (!map_collide(map, screen, x, y)) {
+			sprite->at.x += sprite->delta.x;
+		}
 	}
 
-	if (sprite->delta.y && !map_solid(map, sprite->at.x, sprite->at.y + sprite->delta.y)) {
-		sprite->at.y += sprite->delta.y;
+	x = sprite->at.x;
+	y = sprite->at.y;
+
+	if (sprite->delta.y) {
+		y += sprite->delta.y;
+		if (y < 0) y = 0;
+		if (!map_collide(map, screen, x, y)) {
+			sprite->at.y += sprite->delta.y;
+		}
+		//draw_tile(screen, map, 102, x,     y);
 	}
 }
 
@@ -35,22 +52,23 @@ int sprite_tile(struct sprite *sprite)
 	return t;
 }
 
+#define MOVE_DELTA 8
 void sprite_move_x(struct sprite *sprite, int x)
 {
-	sprite->delta.x = x;
+	sprite->delta.x = x * MOVE_DELTA;
 }
 
 void sprite_move_y(struct sprite *sprite, int y)
 {
-	sprite->delta.y = y;
+	sprite->delta.y = y * MOVE_DELTA;
 }
 
 void sprite_move_all(struct sprite *sprite, int left, int right, int up, int down)
 {
 	sprite->delta.x = 0;
 	sprite->delta.y = 0;
-	if (left)  sprite->delta.x = -1;
-	if (right) sprite->delta.x =  1;
-	if (up)    sprite->delta.y = -1;
-	if (down)  sprite->delta.y =  1;
+	if (left)  sprite->delta.x = -1 * MOVE_DELTA;
+	if (right) sprite->delta.x =  1 * MOVE_DELTA;
+	if (up)    sprite->delta.y = -1 * MOVE_DELTA;
+	if (down)  sprite->delta.y =  1 * MOVE_DELTA;
 }
