@@ -3,8 +3,10 @@
 #define TILE_NONE      0
 #define TILE_SOLID  0x01
 
+#define world_dx(w) ((w)->map->tiles->tile.width  * (w)->scale)
+#define world_dy(w) ((w)->map->tiles->tile.height * (w)->scale)
+
 static int inmap(struct map *map, int x, int y);
-static int istile(int t);
 static void draw(struct world *world, struct tileset *tiles, int t, int x, int y);
 
 static int
@@ -14,11 +16,8 @@ inmap(struct map *map, int x, int y)
 	         y < 0 || y > map->height);
 }
 
-static int
-istile(int t)
-{
-	return (t >> 24) != 0;
-}
+#define istile(t) (((t) >> 24) != 0)
+#define tileno(t) (((t) >> 24) - 1)
 
 static void
 draw(struct world *world, struct tileset *tiles, int t, int x, int y)
@@ -142,8 +141,8 @@ s_focus(struct world *world, int x, int y)
 	int vw, vh, dx, dy;
 	vw = world->viewport.width;
 	vh = world->viewport.height;
-	dx = world->map->tiles->tile.width  * world->scale; /* FIXME: functionalize */
-	dy = world->map->tiles->tile.height * world->scale; /* FIXME: functionalize */
+	dx = world_dx(world);
+	dy = world_dy(world);
 
 	world->viewport.at.x = bounded(0, x - vw / 2, world->map->width  * dx - vw);
 	world->viewport.at.y = bounded(0, y - vh / 2, world->map->height * dy - vh);
@@ -159,12 +158,16 @@ void world_render(struct world * world)
 {
 	assert(world != NULL);
 	assert(world->map != NULL);
+	assert(world->surface != NULL);
 
 	int x, y, t, dx, dy, ox, oy;
-	dx = world->map->tiles->tile.width  * world->scale; /* FIXME: functionalize */
-	dy = world->map->tiles->tile.height * world->scale; /* FIXME: functionalize */
+	dx = world_dx(world);
+	dy = world_dy(world);
 	ox = world->viewport.at.x % dx * -1;
 	oy = world->viewport.at.y % dy * -1;
+
+	/* background image */
+	SDL_FillRect(world->surface, NULL, SDL_MapRGB(world->surface->format, 0, 0, 0));
 
 	/* draw the tiled map background layer */
 	for (x = ox; x <= world->viewport.width; x += dx) {
@@ -174,21 +177,13 @@ void world_render(struct world * world)
 				t = mapat(world->map, 0, (x + world->viewport.at.x) / dx,
 				                         (y + world->viewport.at.y) / dy);
 				if (istile(t)) {
-					t = (t >> 24) - 1; /* FIXME: implementation detail */
-				} else {
-					t = 22; /* FIXME: magic number! */
+					draw(world, NULL, tileno(t), x, y);
+					t = mapat(world->map, 1, (x + world->viewport.at.x) / dx,
+					                         (y + world->viewport.at.y) / dy);
+					if (istile(t)) {
+						draw(world, NULL, tileno(t), x, y);
+					}
 				}
-				draw(world, NULL, t, x, y);
-
-				t = mapat(world->map, 1, (x + world->viewport.at.x) / dx,
-				                         (y + world->viewport.at.y) / dy);
-				if (istile(t)) {
-					t = (t >> 24) - 1; /* FIXME: implementation detail */
-					draw(world, NULL, t, x, y);
-				}
-			} else {
-				t = 22; /* FIXME: magic number */
-				draw(world, NULL, t, x, y);
 			}
 		}
 	}
