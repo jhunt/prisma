@@ -76,24 +76,9 @@ static struct map *    s_parse_map(const char *, struct mapkey *);
 static struct mapkey * s_parse_mapkey(const char *);
 static int             s_lexer(struct parser *);
 
-static int inmap(struct map *map, int x, int y);
-static int istile(int t);
 static char * s_readmap(const char *path);
 static void s_mapsize(const char *raw, int *w, int *h);
 
-
-static int
-inmap(struct map *map, int x, int y)
-{
-	return !(x < 0 || x > map->width ||
-	         y < 0 || y > map->height);
-}
-
-static int
-istile(int t)
-{
-	return (t >> 24) != 0;
-}
 
 static char *
 s_readmap(const char *path)
@@ -177,49 +162,6 @@ map_free(struct map *m)
 		free(m->cells[1]);
 	}
 	free(m);
-}
-
-int
-map_solid(struct map *m, int x, int y)
-{
-	return x < 0 || x > m->width
-	    || y < 0 || y > m->height
-	    || mapat(m, 0, x, y) & TILE_SOLID
-	    || mapat(m, 1, x, y);
-}
-
-int
-map_collide(struct map * map, struct screen * screen, int x, int y)
-{
-	int tx, ty, rc;
-	rc = 0;
-
-	/* dead simple, possibly duplicated work */
-	tx = x;
-	ty = y;
-	pixel2tile(&tx, &ty, screen, map);
-	draw_tile(screen, map, 102, tx, ty);
-	if (map_solid(map, tx, ty)) rc = 1;
-
-	tx = x;
-	ty = y + (map->tiles->tile.height * screen->scale) - 1;
-	pixel2tile(&tx, &ty, screen, map);
-	draw_tile(screen, map, 102, tx, ty);
-	if (map_solid(map, tx, ty)) rc = 1;
-
-	tx = x + (map->tiles->tile.width * screen->scale) - 1;
-	ty = y;
-	pixel2tile(&tx, &ty, screen, map);
-	draw_tile(screen, map, 102, tx, ty);
-	if (map_solid(map, tx, ty)) rc = 1;
-
-	tx = x + (map->tiles->tile.width * screen->scale) - 1;
-	ty = y + (map->tiles->tile.height * screen->scale) - 1;
-	pixel2tile(&tx, &ty, screen, map);
-	draw_tile(screen, map, 102, tx, ty);
-	if (map_solid(map, tx, ty)) rc = 1;
-
-	return rc;
 }
 
 static struct map *
@@ -614,87 +556,4 @@ map_read(const char *path)
 	if (!key) return NULL;
 
 	return s_parse_map(path, key);
-}
-
-void
-map_draw(struct map *map, struct screen *scr)
-{
-	assert(scr != NULL);
-	assert(map != NULL);
-	assert(map->tiles != NULL);
-
-	int x, y;
-	int cx = bounded(0, scr->x - scr->width  / 2, map->width  - scr->width);
-	int cy = bounded(0, scr->y - scr->height / 2, map->height - scr->height);
-
-	for (x = 0; x <= scr->width; x++) {
-		for (y = 0; y <= scr->height; y++) {
-			if (inmap(map, x+cx, y+cy)) {
-				int t = mapat(map, 0, x+cx, y+cy);
-				if (istile(t)) {
-					draw_tile(scr, map, (t >> 24) - 1, x, y);
-				} else {
-					draw_tile(scr, map, 22, x, y);
-				}
-
-				t = mapat(map, 1, x+cx, y+cy);
-				if (istile(t)) {
-					draw_tile(scr, map, (t >> 24) - 1, x, y);
-				}
-			} else {
-				draw_tile(scr, map, 22, x, y);
-			}
-		}
-	}
-}
-
-void
-draw_at(struct screen *screen, struct tileset *tiles, int t, int x, int y)
-{
-	assert(screen != NULL);
-	assert(tiles != NULL);
-	assert(t >= 0);
-	assert(x >= 0);
-	assert(y >= 0);
-
-	SDL_Rect src = {
-		.x = tiles->tile.width  * (t % tiles->width),
-		.y = tiles->tile.height * (t / tiles->width),
-		.w = tiles->tile.width,
-		.h = tiles->tile.height,
-	};
-
-	SDL_Rect dst = {
-		.x = x,
-		.y = y,
-		.w = tiles->tile.width  * screen->scale,
-		.h = tiles->tile.height * screen->scale,
-	};
-
-	SDL_BlitScaled(tiles->surface, &src, screen->surface, &dst);
-}
-
-void
-draw_tile(struct screen *screen, struct map *map, int t, int x, int y)
-{
-	assert(screen != NULL);
-	assert(map != NULL);
-	assert(t >= 0);
-	assert(x >= 0);
-	assert(y >= 0);
-
-	tile2pixel(&x, &y, screen, map);
-	draw_at(screen, map->tiles, t, x, y);
-}
-
-void pixel2tile(int *x, int *y, struct screen *scr, struct map *map)
-{
-	*x = *x / map->tiles->tile.width  / scr->scale;
-	*y = *y / map->tiles->tile.height / scr->scale;
-}
-
-void tile2pixel(int *x, int *y, struct screen *scr, struct map *map)
-{
-	*x = *x * map->tiles->tile.width  * scr->scale;
-	*y = *y * map->tiles->tile.height * scr->scale;
 }

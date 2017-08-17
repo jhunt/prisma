@@ -60,29 +60,24 @@ void quit()
 
 int main(int argc, char **argv)
 {
-	struct screen  *scr;
-	struct map     *map;
-	struct tileset *sprites;
-	struct sprite  *hero;
-	SDL_Event      e;
+	struct world *world;
+	SDL_Event     e;
 	int done;
 
 	init();
 
-	scr = screen_make("prismatic", 640, 480);
-	if (!scr) {
-		fprintf(stderr, "failed to initialize the screen: %s\n", SDL_GetError());
-		return 1;
-	}
+	world = world_new(4);
+	assert(world != NULL);
+	world_unveil(world, "prismatic", 640, 480);
 
-	sprites = tileset_read("assets/purple-hair-sprite");
-	hero    = allocate(1, sizeof(*hero));
-	map     = map_read("maps/base");
-	screen_use_map(scr, map, 4);
+	world->map = map_read("maps/base");;
+	assert(world->map != NULL);
 
-	hero->at.x = 3;
-	hero->at.y = 3;
-	tile2pixel(&hero->at.x, &hero->at.y, scr, map);
+	world->hero = allocate(1, sizeof(struct sprite));
+	assert(world->hero != NULL);
+	world->hero->tileset = tileset_read("assets/purple-hair-sprite");
+	world->hero->at.x = 3 * 16 * world->scale; /* FIXME */
+	world->hero->at.y = 3 * 16 * world->scale; /* FIXME */
 
 	done = 0;
 	while (!done) {
@@ -97,7 +92,7 @@ int main(int argc, char **argv)
 				break;
 
 			case SDL_JOYHATMOTION:
-				sprite_move_all(hero,
+				sprite_move_all(world->hero,
 					e.jhat.value & SDL_HAT_LEFT,
 					e.jhat.value & SDL_HAT_RIGHT,
 					e.jhat.value & SDL_HAT_UP,
@@ -106,17 +101,17 @@ int main(int argc, char **argv)
 
 			case SDL_JOYAXISMOTION:
 				switch (e.jaxis.axis % 2) {
-				case 0: sprite_move_x(hero, analog(e.jaxis.value)); break;
-				case 1: sprite_move_y(hero, analog(e.jaxis.value)); break;
+				case 0: sprite_move_x(world->hero, analog(e.jaxis.value)); break;
+				case 1: sprite_move_y(world->hero, analog(e.jaxis.value)); break;
 				}
 				break;
 
 			case SDL_KEYUP:
 				switch (e.key.keysym.sym) {
 				case SDLK_UP:
-				case SDLK_DOWN:  sprite_move_y(hero, 0); break;
+				case SDLK_DOWN:  sprite_move_y(world->hero, 0); break;
 				case SDLK_LEFT:
-				case SDLK_RIGHT: sprite_move_x(hero, 0); break;
+				case SDLK_RIGHT: sprite_move_x(world->hero, 0); break;
 				}
 				break;
 
@@ -126,33 +121,21 @@ int main(int argc, char **argv)
 					done = 1;
 					break;
 
-				case SDLK_UP:    sprite_move_y(hero, -1); break;
-				case SDLK_DOWN:  sprite_move_y(hero,  1); break;
-				case SDLK_LEFT:  sprite_move_x(hero, -1); break;
-				case SDLK_RIGHT: sprite_move_x(hero,  1); break;
+				case SDLK_UP:    sprite_move_y(world->hero, -1); break;
+				case SDLK_DOWN:  sprite_move_y(world->hero,  1); break;
+				case SDLK_LEFT:  sprite_move_x(world->hero, -1); break;
+				case SDLK_RIGHT: sprite_move_x(world->hero,  1); break;
 				}
 				break;
 			}
 		}
 
-		/* FIXME: this is hacky as hell, and needs map+screen changes */
-		sprite_collide(hero, map, scr);
-		scr->x = hero->at.x; scr->y = hero->at.y;
-		pixel2tile(&scr->x, &scr->y, scr, map);
-		int cx = bounded(0, scr->x - scr->width  / 2, map->width  - scr->width);
-		int cy = bounded(0, scr->y - scr->height / 2, map->height - scr->height);
-		tile2pixel(&cx, &cy, scr, map);
-		if (cx > hero->at.x) cx = hero->at.x;
-		if (cy > hero->at.y) cy = hero->at.y;
-
-		map_draw(map, scr);
-		draw_at(scr, sprites, sprite_tile(hero), hero->at.x - cx, hero->at.y - cy);
-		screen_draw(scr);
+		world_update(world);
+		world_render(world);
 		SDL_Delay(16);
 	}
 
-	map_free(map);
-	screen_free(scr);
+	world_free(world);
 	quit();
 
 	return 0;

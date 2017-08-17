@@ -33,17 +33,6 @@ int bounded(int min, int v, int max);
 #define ANALOG_TOLERANCE 4096
 int analog(int v);
 
-struct screen {
-	int  width;
-	int  height;
-	int  scale;
-	int  x;
-	int  y;
-
-	SDL_Surface  *surface;
-	SDL_Window   *window;
-};
-
 struct tileset {
 	SDL_Surface *surface;
 	int width;
@@ -77,17 +66,36 @@ struct sprite {
 	struct coords delta;
 };
 
+struct world {
+	SDL_Window  *window;
+	SDL_Surface *surface;
+
+	int scale;
+
+	struct {
+		struct coords at;
+		int width;
+		int height;
+	} viewport;
+
+	struct map    *map;
+	struct sprite *hero;
+};
+
+struct world * world_new(int scale);
+void           world_free(struct world * world);
+
+void           world_unveil(struct world * world, const char *title, int w, int h);
+void           world_update(struct world * world);
+void           world_render(struct world * world);
+
+void           world_draw(struct world * world, struct tileset* tiles, int t, int x, int y);
+
 int  sprite_moving(struct sprite *sprite);
-void sprite_collide(struct sprite *sprite, struct map *map, struct screen *screen);
 int  sprite_tile(struct sprite *sprite);
 void sprite_move_x(struct sprite *sprite, int x);
 void sprite_move_y(struct sprite *sprite, int y);
 void sprite_move_all(struct sprite *sprite, int left, int right, int up, int down);
-
-struct screen * screen_make(const char *title, int w, int h);
-void            screen_free(struct screen * screen);
-void            screen_use_map(struct screen * s, struct map * map, int scale);
-void            screen_draw(struct screen * screen);
 
 struct tileset * tileset_read(const char * path);
 void             tileset_free(struct tileset * tiles);
@@ -95,15 +103,6 @@ void             tileset_free(struct tileset * tiles);
 #define mapat(map,i,x,y) \
           ((map)->cells[i][(map)->height * (x) + (y)])
 struct map * map_read(const char * path);
-void         map_draw(struct map * map, struct screen * screen);
 void         map_free(struct map * map);
-int          map_solid(struct map * map, int x, int y);
-int          map_collide(struct map * map, struct screen * screen, int x, int y);
-
-void draw_at(struct screen * screen, struct tileset* tiles, int t, int x, int y);
-void draw_tile(struct screen * screen, struct map* map, int t, int x, int y);
-
-void pixel2tile(int *x, int *y, struct screen *scr, struct map *map);
-void tile2pixel(int *x, int *y, struct screen *scr, struct map *map);
 
 #endif

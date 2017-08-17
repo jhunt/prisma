@@ -5,34 +5,6 @@ int sprite_moving(struct sprite *sprite)
 	return sprite->delta.x || sprite->delta.y;
 }
 
-void sprite_collide(struct sprite *sprite, struct map *map, struct screen *screen)
-{
-	int x, y;
-
-	x = sprite->at.x;
-	y = sprite->at.y;
-
-	if (sprite->delta.x) {
-		x += sprite->delta.x;
-		if (x < 0) x = 0;
-		if (!map_collide(map, screen, x, y)) {
-			sprite->at.x += sprite->delta.x;
-		}
-	}
-
-	x = sprite->at.x;
-	y = sprite->at.y;
-
-	if (sprite->delta.y) {
-		y += sprite->delta.y;
-		if (y < 0) y = 0;
-		if (!map_collide(map, screen, x, y)) {
-			sprite->at.y += sprite->delta.y;
-		}
-		//draw_tile(screen, map, 102, x,     y);
-	}
-}
-
 int sprite_tile(struct sprite *sprite)
 {
 	int t;
