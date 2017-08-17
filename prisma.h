@@ -33,6 +33,11 @@ int bounded(int min, int v, int max);
 #define ANALOG_TOLERANCE 4096
 int analog(int v);
 
+struct coords {
+	int x;
+	int y;
+};
+
 struct tileset {
 	SDL_Surface *surface;
 	int width;
@@ -49,12 +54,9 @@ struct map {
 	int  width;
 	int  height;
 
-	struct tileset *tiles;
-};
+	struct coords entry;
 
-struct coords {
-	int x;
-	int y;
+	struct tileset *tiles;
 };
 
 struct sprite {
@@ -86,6 +88,7 @@ struct world * world_new(int scale);
 void           world_free(struct world * world);
 
 void           world_unveil(struct world * world, const char *title, int w, int h);
+void           world_load(struct world * world, const char *map, const char *hero);
 void           world_update(struct world * world);
 void           world_render(struct world * world);
 

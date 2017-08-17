@@ -25,6 +25,7 @@
 #define T_KW_VOID    7
 #define T_KW_PLACE   8
 #define T_KW_FROM    9
+#define T_KW_ENTRY  10
 #define T_STRING   128
 #define T_NUMBER   129
 #define T_SYMBOL   130
@@ -44,6 +45,7 @@ struct mapkey {
 	char *name;
 	char *tileset;
 
+	struct coords entry;
 	int   default_tile;
 	char  void_tile;
 	int   tiles[256];
@@ -181,6 +183,8 @@ s_parse_map(const char *path, struct mapkey *key)
 	s_mapsize(raw, &map->width, &map->height);
 	map->cells[0] = calloc(map->width * map->height, sizeof(int));
 	map->cells[1] = calloc(map->width * map->height, sizeof(int));
+	map->entry.x = key->entry.x;
+	map->entry.y = key->entry.y;
 
 	/* decode the newline-terminated map into a cell-list */
 	for (x = y = 0, p = raw; *p; p++) {
@@ -354,6 +358,23 @@ s_parse_mapkey(const char *path)
 			}
 			m->objects[m->next_object].at.y = p.data.number + y;
 			m->next_object++;
+			break;
+
+		case T_KW_ENTRY:
+			token = s_lexer(&p);
+			if (token != T_NUMBER) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "The `entry' keyword requires both an X and Y coordinate, as numbers\n");
+			}
+			m->entry.x = p.data.number + x;
+
+			token = s_lexer(&p);
+			if (token != T_NUMBER) {
+				fprintf(stderr, "%s:%d:%d: ", p.file, p.line, p.column);
+				fprintf(stderr, "The `entry' keyword requires both an X and Y coordinate, as numbers\n");
+			}
+			m->entry.y = p.data.number + y;
+
 			break;
 
 		case T_KW_EMPTY:
@@ -531,6 +552,7 @@ again:
 			if (s_keyword(p, "empty"))   { s_next(p); return T_KW_EMPTY;   }
 			if (s_keyword(p, "solid"))   { s_next(p); return T_KW_SOLID;   }
 			if (s_keyword(p, "place"))   { s_next(p); return T_KW_PLACE;   }
+			if (s_keyword(p, "entry"))   { s_next(p); return T_KW_ENTRY;   }
 			if (s_keyword(p, "from"))    { s_next(p); return T_KW_FROM;    }
 			if (s_keyword(p, "tile"))    { s_next(p); return T_KW_TILE;    }
 			if (s_keyword(p, "void"))    { s_next(p); return T_KW_VOID;    }

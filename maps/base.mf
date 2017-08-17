@@ -15,6 +15,9 @@ tile solid $ 44 ;; chest
 tile empty o 68 ;; coins
 tile empty J 69 ;; jewels
 
+from 2 3
+entry 0 0
+
 from 1 1
 place n 0 0
 place n 1 0

@@ -85,6 +85,19 @@ void world_unveil(struct world * world, const char *title, int w, int h)
 	}
 }
 
+void world_load(struct world *world, const char *map, const char *hero)
+{
+	assert(world != NULL);
+
+	world->map = map_read(map);
+	assert(world->map != NULL);
+
+	world->hero = allocate(1, sizeof(struct sprite));
+	world->hero->tileset = tileset_read(hero);
+	world->hero->at.x = world->map->entry.x * world_dx(world);
+	world->hero->at.y = world->map->entry.y * world_dy(world);
+}
+
 static int
 s_solid(struct world * world, int x, int y)
 {

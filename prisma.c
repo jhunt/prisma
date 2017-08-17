@@ -67,17 +67,8 @@ int main(int argc, char **argv)
 	init();
 
 	world = world_new(4);
-	assert(world != NULL);
+	world_load(world, "maps/base", "assets/purple-hair-sprite");
 	world_unveil(world, "prismatic", 640, 480);
-
-	world->map = map_read("maps/base");;
-	assert(world->map != NULL);
-
-	world->hero = allocate(1, sizeof(struct sprite));
-	assert(world->hero != NULL);
-	world->hero->tileset = tileset_read("assets/purple-hair-sprite");
-	world->hero->at.x = 3 * 16 * world->scale; /* FIXME */
-	world->hero->at.y = 3 * 16 * world->scale; /* FIXME */
 
 	done = 0;
 	while (!done) {
