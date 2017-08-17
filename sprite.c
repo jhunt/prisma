@@ -20,7 +20,6 @@ int sprite_tile(struct sprite *sprite)
 	   : sprite->delta.y < 0 ? 9  /* UP */
 	   :                       0; /* DOWN */
 
-	sprite->frame = (sprite->frame + 1) % (3 - 1);
 	return t;
 }
 

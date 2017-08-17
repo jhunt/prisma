@@ -73,6 +73,7 @@ struct world {
 	SDL_Surface *surface;
 
 	int scale;
+	int tocks;
 
 	struct {
 		struct coords at;

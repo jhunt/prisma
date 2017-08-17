@@ -1,4 +1,5 @@
 #include "prisma.h"
+#include <time.h>
 
 #define TILE_NONE      0
 #define TILE_SOLID  0x01
@@ -125,6 +126,24 @@ s_collide(struct world * world, int x, int y)
 }
 
 static void
+s_tick_tock(struct world * world)
+{
+	int rc;
+	struct timespec now;
+
+	rc = clock_gettime(CLOCK_MONOTONIC, &now);
+	if (rc != 0) {
+		fprintf(stderr, "failed to update world tocks from CLOCK_MONOTONIC: %s (error %d)\n",
+			strerror(errno), errno);
+		exit(EXIT_ENV_FAILURE);
+	}
+	world->tocks = (now.tv_sec % 10) * 1000
+	             + (now.tv_nsec / 1000000);
+
+	world->hero->frame = (world->tocks / 200) % 2;
+}
+
+static void
 s_hero_collision(struct world * world)
 {
 	int x, y;
@@ -164,6 +183,7 @@ s_focus(struct world *world, int x, int y)
 
 void world_update(struct world * world)
 {
+	s_tick_tock(world);
 	s_hero_collision(world);
 	s_focus(world, world->hero->at.x, world->hero->at.y);
 }
