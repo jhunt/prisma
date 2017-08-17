@@ -8,13 +8,6 @@
 #define MAX_MAP_SIZE (1024 * 1024 * 8)
 #define READ_BLOCK_SIZE 8192
 
-
-#define TILE_NONE      0
-#define TILE_SOLID  0x01
-
-#define HERO_AVATAR 0
-
-
 #define T_EOF        0
 #define T_KW_MAP     1
 #define T_KW_TILESET 2
@@ -175,7 +168,6 @@ s_parse_map(const char *path, struct mapkey *key)
 
 	raw = s_readmap(path);
 	map = allocate(1, sizeof(struct map));
-	fprintf(stderr, "reading tiles from %s\n", key->tileset);
 	map->tiles = tileset_read(key->tileset);
 	if (!map->tiles) {
 		fprintf(stderr, "TILE READ FAILED\n");

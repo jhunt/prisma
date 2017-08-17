@@ -101,8 +101,8 @@ void world_load(struct world *world, const char *map, const char *hero)
 static int
 s_solid(struct world * world, int x, int y)
 {
-	x = x / world->map->tiles->tile.width  / world->scale;
-	y = y / world->map->tiles->tile.height / world->scale;
+	x /= world_dx(world);
+	y /= world_dy(world);
 
 	return x < 0 || x > world->map->width
 	    || y < 0 || y > world->map->height
@@ -114,8 +114,9 @@ static int
 s_collide(struct world * world, int x, int y)
 {
 	int dx, dy;
-	dx = world->map->tiles->tile.width  * world->scale - 1;
-	dy = world->map->tiles->tile.height * world->scale - 1;
+
+	dx = world_dx(world) - 1;
+	dy = world_dy(world) - 1;
 
 	return s_solid(world, x,    y)
 	    || s_solid(world, x+dx, y)

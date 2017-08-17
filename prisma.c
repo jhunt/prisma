@@ -10,11 +10,6 @@
 #include <SDL.h>
 #include <SDL_image.h>
 
-/* upper limit of 8MiB on map size */
-#define MAX_MAP_SIZE (1024 * 1024 * 8)
-#define READ_BLOCK_SIZE 8192
-
-
 void init()
 {
 	int rc;
@@ -40,23 +35,6 @@ void quit()
 	IMG_Quit();
 	SDL_Quit();
 }
-
-/* tiles! */
-#define TILE_NONE            0
-#define TILE_A_TOP_WALL    ( 1 << 24)
-#define TILE_A_SIDE_WALL   ( 2 << 24)
-#define TILE_A_BOTTOM_WALL ( 3 << 24)
-#define TILE_A_TOP_CORNER  ( 4 << 24)
-#define TILE_A_FLOOR       ( 9 << 24)
-#define TILE_A_WHOLE_JAR   (28 << 24)
-#define TILE_A_TABLE       (55 << 24)
-#define TILE_A_CABINET     (56 << 24)
-
-#define HERO_FRAMES 3
-#define HERO_DOWN  0
-#define HERO_RIGHT 3
-#define HERO_LEFT  6
-#define HERO_UP    9
 
 int main(int argc, char **argv)
 {
